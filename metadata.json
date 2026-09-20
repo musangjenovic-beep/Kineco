@@ -1,0 +1,6 @@
+{
+  "name": "EduKin RDC - Gestion Scolaire",
+  "description": "Plateforme numérique multi-écoles de gestion scolaire pour la RDC: suivi des élèves, bulletins officiels, présences, discipline, frais scolaires et paiements Mobile Money.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
