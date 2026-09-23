@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { UserSession, UserRole } from '../types';
+import { MasomoLogo } from './MasomoLogo';
 import { 
   Mail, 
   User, 
@@ -155,14 +156,15 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
       {/* Top Bar with School System Context */}
       <div className="w-full border-b border-stone-100 py-2.5 px-4 text-xs text-stone-500 bg-stone-50/60">
         <div className="max-w-md mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-1.5 font-medium text-stone-700">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#5f7a63]" />
-            <span>EduKin RDC • Portail Scolaire</span>
+          <div className="flex items-center gap-2 font-medium text-stone-700">
+            <span className="w-2 h-2 rounded-full bg-blue-600" />
+            <span className="font-bold text-slate-800">Masomo</span>
+            <span className="text-slate-400">• Portail Scolaire RDC</span>
           </div>
           <button
             type="button"
             onClick={() => setIsDemoModalOpen(true)}
-            className="text-stone-600 hover:text-stone-900 font-medium underline transition-colors"
+            className="text-blue-600 hover:text-blue-800 font-medium underline transition-colors"
           >
             Comptes de test (Rôles)
           </button>
@@ -172,56 +174,21 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
       {/* Main Container - Phone Mockup Proportions centered */}
       <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
         <div className="w-full max-w-[360px] mx-auto space-y-6">
-          {/* Lotus / Emblem Logo from insc.png */}
+          {/* Masomo Open Book Logo */}
           <div className="text-center pt-2">
-            <svg
-              className="w-12 h-12 mx-auto text-stone-800"
-              viewBox="0 0 64 64"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              {/* Central Petal */}
-              <path
-                d="M32 10C32 10 39 24 39 36C39 40.5 35.8 44 32 44C28.2 44 25 40.5 25 36C25 24 32 10 32 10Z"
-                fill="#2c352d"
-              />
-              <path
-                d="M32 14C32 14 36.5 25 36.5 35C36.5 37.5 34.5 40 32 40C29.5 40 27.5 37.5 27.5 35C27.5 25 32 14 32 14Z"
-                fill="#4a584c"
-              />
-              {/* Left Middle Petal */}
-              <path
-                d="M27 16C27 16 16 26 18 38C19 43 23 45 27 45C27 45 23 37 25 30C26.5 24.5 27 16 27 16Z"
-                fill="#2c352d"
-              />
-              {/* Right Middle Petal */}
-              <path
-                d="M37 16C37 16 48 26 46 38C45 43 41 45 37 45C37 45 41 37 39 30C37.5 24.5 37 16 37 16Z"
-                fill="#2c352d"
-              />
-              {/* Left Outer Petal */}
-              <path
-                d="M21 24C21 24 10 33 13 42C14.5 46.5 19 47 22 47C22 47 16 40 19 34C20.5 31 21 24 21 24Z"
-                fill="#3a453b"
-              />
-              {/* Right Outer Petal */}
-              <path
-                d="M43 24C43 24 54 33 51 42C49.5 46.5 45 47 42 47C42 47 48 40 45 34C43.5 31 43 24 43 24Z"
-                fill="#3a453b"
-              />
-              {/* Lotus Base Foundation */}
-              <path
-                d="M20 48C26 50 38 50 44 48C41 51 23 51 20 48Z"
-                fill="#2c352d"
-              />
-            </svg>
+            <div className="flex justify-center mb-2">
+              <MasomoLogo size="xl" />
+            </div>
 
-            {/* Typography matching image */}
-            <h1 className="text-[26px] font-semibold text-stone-900 tracking-tight leading-snug mt-4">
-              Your journey starts here
+            {/* Typography matching Masomo */}
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-snug mt-2">
+              Masomo
             </h1>
-            <p className="text-[17px] font-normal text-stone-800 tracking-tight mt-0.5">
-              Take the first step
+            <p className="text-sm font-semibold text-blue-600 tracking-tight">
+              Plateforme Numérique Scolaire RDC
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              {mode === 'signup' ? 'Créer votre compte enseignant ou élève' : 'Accédez à votre espace scolaire'}
             </p>
           </div>
 
@@ -482,7 +449,7 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
 
       {/* Discreet bottom footer */}
       <footer className="w-full border-t border-stone-100 py-3 text-center text-xs text-stone-400">
-        EduKin RDC • Système de gestion scolaire certifié EPST
+        Masomo RDC • Système de gestion scolaire certifié EPST
       </footer>
     </div>
   );

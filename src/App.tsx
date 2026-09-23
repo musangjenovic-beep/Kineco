@@ -21,6 +21,8 @@ import {
 } from './types';
 
 import { Header, TeacherTabType } from './components/Header';
+import { SidebarNav } from './components/SidebarNav';
+import { TeacherProfileView } from './components/TeacherProfileView';
 import { BulletinOfficielModal } from './components/BulletinOfficielModal';
 import { RecuPaiementModal } from './components/RecuPaiementModal';
 import { SmsModuleModal } from './components/SmsModuleModal';
@@ -81,7 +83,7 @@ export default function App() {
 
   // Role & Tenant Context State
   const [currentRole, setCurrentRole] = useState<UserRole>(() => {
-    return currentUser?.role || 'directeur';
+    return currentUser?.role || 'enseignant';
   });
   const [schools, setSchools] = useState<School[]>([INITIAL_DEFAULT_SCHOOL]);
   const [currentSchool, setCurrentSchool] = useState<School>(INITIAL_DEFAULT_SCHOOL);
@@ -113,8 +115,26 @@ export default function App() {
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [isNewSchoolModalOpen, setIsNewSchoolModalOpen] = useState(false);
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
-  const [teacherActiveTab, setTeacherActiveTab] = useState<TeacherTabType>('attendance');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [teacherActiveTab, setTeacherActiveTab] = useState<TeacherTabType>('classes');
   const [teacherUnreadMessages, setTeacherUnreadMessages] = useState<number>(0);
+
+  // Real Dark Mode State synced with DOM and localStorage
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('masomo_theme');
+    if (saved) return saved === 'dark';
+    return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('masomo_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('masomo_theme', 'light');
+    }
+  }, [isDarkMode]);
 
   // Handle Login and Logout
   const handleLoginSuccess = (session: UserSession) => {
@@ -569,28 +589,42 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans">
-      {/* Top Navigation & Role/Tenant Bar */}
-      {currentSchool && (
-        <Header
-          schools={schools}
-          currentSchool={currentSchool}
-          currentUser={currentUser || undefined}
-          currentRole={currentRole}
-          onSelectSchool={(school) => setCurrentSchool(school)}
-          onSelectRole={(role) => setCurrentRole(role)}
-          onOpenSmsModal={() => setIsSmsModalOpen(true)}
-          onOpenNewSchoolModal={() => setIsNewSchoolModalOpen(true)}
-          onOpenUserManagementModal={() => setIsUserManagementOpen(true)}
-          onLogout={handleLogout}
-          teacherActiveTab={teacherActiveTab}
-          onSelectTeacherTab={(tab) => setTeacherActiveTab(tab)}
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans transition-colors">
+      {/* Sleek Modern Collapsible Sidebar strictly for Teacher role */}
+      {currentSchool && currentRole === 'enseignant' && (
+        <SidebarNav
+          activeTab={teacherActiveTab}
+          onSelectTab={(tab) => setTeacherActiveTab(tab)}
           unreadMessagesCount={teacherUnreadMessages}
+          isTitulaire={true}
+          isDarkMode={isDarkMode}
+          onToggleDarkMode={() => setIsDarkMode((prev) => !prev)}
+          currentUser={currentUser}
+          currentRole={currentRole}
+          classes={classes}
+          onSelectClass={() => setTeacherActiveTab('classes')}
+          onOpenUserManagement={() => setIsUserManagementOpen(true)}
+          onLogout={handleLogout}
+          isMobileOpen={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
         />
       )}
 
-      {/* Main Content Area depending on Role */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top Header */}
+        {currentSchool && (
+          <Header
+            userName={currentUser?.fullName || 'Professeur'}
+            userRole={currentRole}
+            isMenuOpen={isMobileSidebarOpen}
+            onToggleMenu={() => setIsMobileSidebarOpen((prev) => !prev)}
+            onLogout={handleLogout}
+          />
+        )}
+
+        {/* Main Content Area depending on Role */}
+        <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {currentSchool && (
           <>
             {isUserManagementOpen ? (
@@ -609,6 +643,7 @@ export default function App() {
                     onOpenNewSchoolModal={() => setIsNewSchoolModalOpen(true)}
                     onSelectSchool={(school) => setCurrentSchool(school)}
                     currentSchool={currentSchool}
+                    onOpenUserManagement={() => setIsUserManagementOpen(true)}
                   />
                 )}
 
@@ -692,28 +727,40 @@ export default function App() {
 
                 {/* ENSEIGNANT ROLE */}
                 {currentRole === 'enseignant' && (
-                  <EnseignantView
-                    school={currentSchool}
-                    classes={classes}
-                    subjects={subjects}
-                    students={students}
-                    grades={grades}
-                    periods={academicPeriods}
-                    attendance={attendance}
-                    currentUser={currentUser}
-                    teachers={teachers}
-                    parents={parents}
-                    activeTab={teacherActiveTab}
-                    onTabChange={(tab) => setTeacherActiveTab(tab)}
-                    onUnreadCountChange={(count) => setTeacherUnreadMessages(count)}
-                    onSaveGrade={handleSaveGrade}
-                    onSaveGradeBatch={handleSaveGradesBatch}
-                    onMarkAttendance={handleMarkAttendance}
-                    onSaveAttendanceBatch={handleSaveAttendanceBatch}
-                    onSendSmsAlert={async (phone, name, msg) => {
-                      await handleSendSms(phone, name, msg, 'information');
-                    }}
-                  />
+                  teacherActiveTab === 'profil' ? (
+                    <TeacherProfileView
+                      currentUser={currentUser}
+                      currentSchool={currentSchool}
+                      classes={classes}
+                      subjects={subjects}
+                      teachers={teachers}
+                      onBackToClasses={() => setTeacherActiveTab('classes')}
+                      onUpdateCurrentUser={(updated) => setCurrentUser(updated)}
+                    />
+                  ) : (
+                    <EnseignantView
+                      school={currentSchool}
+                      classes={classes}
+                      subjects={subjects}
+                      students={students}
+                      grades={grades}
+                      periods={academicPeriods}
+                      attendance={attendance}
+                      currentUser={currentUser}
+                      teachers={teachers}
+                      parents={parents}
+                      activeTab={teacherActiveTab as any}
+                      onTabChange={(tab) => setTeacherActiveTab(tab)}
+                      onUnreadCountChange={(count) => setTeacherUnreadMessages(count)}
+                      onSaveGrade={handleSaveGrade}
+                      onSaveGradeBatch={handleSaveGradesBatch}
+                      onMarkAttendance={handleMarkAttendance}
+                      onSaveAttendanceBatch={handleSaveAttendanceBatch}
+                      onSendSmsAlert={async (phone, name, msg) => {
+                        await handleSendSms(phone, name, msg, 'information');
+                      }}
+                    />
+                  )
                 )}
 
                 {/* PARENT / RESPONSABLE / ELEVE ROLE */}
@@ -743,16 +790,7 @@ export default function App() {
           </>
         )}
       </main>
-
-      {/* FOOTER */}
-      <footer className="bg-slate-900 text-slate-400 py-4 px-4 border-t border-slate-800 text-center text-xs space-y-1 print:hidden">
-        <div className="font-semibold text-slate-200">
-          EduKin RDC — Plateforme Scolaire Multi-Établissements
-        </div>
-        <p className="text-[11px] text-slate-500">
-          Kinshasa & Provinces • Conforme aux normes EPST • Bivalent USD / CDF • M-Pesa, Airtel & Orange Money
-        </p>
-      </footer>
+      </div>
 
       {/* MODAL 1: Bulletin Officiel EPST RDC */}
       {bulletinData && (

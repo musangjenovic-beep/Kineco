@@ -6,6 +6,7 @@ interface SuperAdminViewProps {
   onOpenNewSchoolModal: () => void;
   onSelectSchool: (school: School) => void;
   currentSchool: School;
+  onOpenUserManagement?: () => void;
 }
 
 export const SuperAdminView = ({
@@ -13,6 +14,7 @@ export const SuperAdminView = ({
   onOpenNewSchoolModal,
   onSelectSchool,
   currentSchool,
+  onOpenUserManagement,
 }: SuperAdminViewProps) => {
   return (
     <div className="space-y-6">
@@ -28,18 +30,31 @@ export const SuperAdminView = ({
             </div>
             <h1 className="text-2xl font-bold tracking-tight mt-1">Supervision Globale de la Plateforme</h1>
             <p className="text-xs text-purple-200 mt-1 max-w-xl">
-              Gestion centralisée des établissements abonnés, isolation stricte des données par <code>school_id</code> et monitoring des passerelles RDC.
+              Gestion centralisée des établissements abonnés, isolation stricte des données par <code>school_id</code> et gestion globale des utilisateurs et rôles.
             </p>
           </div>
 
-          <button
-            id="btn-superadmin-create-school"
-            onClick={onOpenNewSchoolModal}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white text-purple-950 hover:bg-purple-50 font-bold text-xs shadow transition-colors"
-          >
-            <Plus className="w-4 h-4 text-purple-900" />
-            <span>Créer un Établissement</span>
-          </button>
+          <div className="flex items-center gap-2.5">
+            {onOpenUserManagement && (
+              <button
+                id="btn-superadmin-manage-users"
+                onClick={onOpenUserManagement}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-800/80 hover:bg-purple-700 text-white font-bold text-xs shadow transition-colors border border-purple-600/50"
+              >
+                <Users className="w-4 h-4 text-purple-200" />
+                <span>Gestion Utilisateurs & Rôles</span>
+              </button>
+            )}
+
+            <button
+              id="btn-superadmin-create-school"
+              onClick={onOpenNewSchoolModal}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white text-purple-950 hover:bg-purple-50 font-bold text-xs shadow transition-colors"
+            >
+              <Plus className="w-4 h-4 text-purple-900" />
+              <span>Créer un Établissement</span>
+            </button>
+          </div>
         </div>
 
         {/* Global Key Metrics */}

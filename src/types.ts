@@ -119,6 +119,8 @@ export interface Teacher {
   email: string;
   specialty: string;
   assignedClasses: string[]; // classIds
+  qualification?: string;
+  userId?: string;
 }
 
 export interface Staff {

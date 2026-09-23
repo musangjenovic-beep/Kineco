@@ -414,6 +414,18 @@ async function startServer() {
     res.json(db.getTeachers(schoolId));
   });
 
+  app.put('/api/teachers/:id', (req: Request, res: Response) => {
+    const updated = db.updateTeacher(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'Enseignant introuvable' });
+    res.json(updated);
+  });
+
+  app.put('/api/users/:id/profile', (req: Request, res: Response) => {
+    const updated = db.updateUserProfile(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    res.json(updated);
+  });
+
   app.get('/api/staff', (req: Request, res: Response) => {
     const schoolId = (req.query.schoolId as string) || 'sch-bobokoli';
     res.json(db.getStaff(schoolId));

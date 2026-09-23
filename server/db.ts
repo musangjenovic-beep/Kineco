@@ -323,7 +323,8 @@ class DatabaseManager {
     };
     this.parents.push(parent1, parent2, parent3);
 
-    // 7. Élèves
+    // 7. Élèves (Exactement 7 élèves par classe pour c1, c2, c3, c4 = 28 élèves)
+    // Classe c3 : 1ère Humanités Scientifiques (7 élèves)
     const s1: Student = {
       id: 'stu-naomi',
       schoolId: school1.id,
@@ -338,23 +339,6 @@ class DatabaseManager {
       classId: c3.id,
       parentId: parent1.id,
       photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      active: true,
-      registrationDate: `${currentYearNum}-09-02`,
-    };
-    const s2: Student = {
-      id: 'stu-sarah',
-      schoolId: school1.id,
-      matricule: 'BOB-2026-0042',
-      firstName: 'Sarah',
-      lastName: 'Musang',
-      postName: 'Lukusa',
-      gender: 'F',
-      birthDate: '2012-08-25',
-      birthPlace: 'Lubumbashi',
-      address: 'Macampagne, Ngaliema',
-      classId: c1.id,
-      parentId: parent1.id,
-      photoUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
       active: true,
       registrationDate: `${currentYearNum}-09-02`,
     };
@@ -409,7 +393,404 @@ class DatabaseManager {
       active: true,
       registrationDate: `${currentYearNum}-09-03`,
     };
-    this.students.push(s1, s2, s3, s4, s5);
+    const s6: Student = {
+      id: 'stu-c3-5',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0071',
+      firstName: 'Jonathan',
+      lastName: 'Kalonji',
+      postName: 'Mulumba',
+      gender: 'M',
+      birthDate: '2010-02-18',
+      birthPlace: 'Kinshasa',
+      address: 'Binza Ozone, Ngaliema',
+      classId: c3.id,
+      parentId: parent1.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-01`,
+    };
+    const s7: Student = {
+      id: 'stu-c3-6',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0072',
+      firstName: 'Deborah',
+      lastName: 'Tshilombo',
+      postName: 'Kanku',
+      gender: 'F',
+      birthDate: '2010-08-30',
+      birthPlace: 'Kananga',
+      address: 'UPN, Ngaliema',
+      classId: c3.id,
+      parentId: parent2.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-02`,
+    };
+    const s8: Student = {
+      id: 'stu-c3-7',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0073',
+      firstName: 'Elie',
+      lastName: 'Mayamba',
+      postName: 'Lelo',
+      gender: 'M',
+      birthDate: '2010-10-05',
+      birthPlace: 'Matadi',
+      address: 'Delvaux, Ngaliema',
+      classId: c3.id,
+      parentId: parent3.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-01`,
+    };
+
+    // Classe c1 : 7ème Éducation de Base A (7 élèves)
+    const s2: Student = {
+      id: 'stu-sarah',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0042',
+      firstName: 'Sarah',
+      lastName: 'Musang',
+      postName: 'Lukusa',
+      gender: 'F',
+      birthDate: '2012-08-25',
+      birthPlace: 'Lubumbashi',
+      address: 'Macampagne, Ngaliema',
+      classId: c1.id,
+      parentId: parent1.id,
+      photoUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
+      active: true,
+      registrationDate: `${currentYearNum}-09-02`,
+    };
+    const s1_2: Student = {
+      id: 'stu-c1-2',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0102',
+      firstName: 'David',
+      lastName: 'Kankonde',
+      postName: 'Beya',
+      gender: 'M',
+      birthDate: '2012-03-14',
+      birthPlace: 'Kinshasa',
+      address: 'Binza Pigeon',
+      classId: c1.id,
+      parentId: parent2.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-01`,
+    };
+    const s1_3: Student = {
+      id: 'stu-c1-3',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0103',
+      firstName: 'Priscille',
+      lastName: 'Kavira',
+      postName: 'Sikuli',
+      gender: 'F',
+      birthDate: '2012-05-20',
+      birthPlace: 'Goma',
+      address: 'Mont Fleury, Ngaliema',
+      classId: c1.id,
+      parentId: parent3.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-01`,
+    };
+    const s1_4: Student = {
+      id: 'stu-c1-4',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0104',
+      firstName: 'Ephraim',
+      lastName: 'Lukusa',
+      postName: 'Muteba',
+      gender: 'M',
+      birthDate: '2012-09-11',
+      birthPlace: 'Kinshasa',
+      address: 'Delvaux, Ngaliema',
+      classId: c1.id,
+      parentId: parent1.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-02`,
+    };
+    const s1_5: Student = {
+      id: 'stu-c1-5',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0105',
+      firstName: 'Dorcas',
+      lastName: 'Mbuyi',
+      postName: 'Kashala',
+      gender: 'F',
+      birthDate: '2012-11-04',
+      birthPlace: 'Mbuji-Mayi',
+      address: 'UPN, Ngaliema',
+      classId: c1.id,
+      parentId: parent2.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-01`,
+    };
+    const s1_6: Student = {
+      id: 'stu-c1-6',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0106',
+      firstName: 'Josué',
+      lastName: 'Nzuzi',
+      postName: 'Luyeye',
+      gender: 'M',
+      birthDate: '2012-01-29',
+      birthPlace: 'Kenge',
+      address: 'Kinsuka, Ngaliema',
+      classId: c1.id,
+      parentId: parent3.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-03`,
+    };
+    const s1_7: Student = {
+      id: 'stu-c1-7',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0107',
+      firstName: 'Bénédicte',
+      lastName: 'Masika',
+      postName: 'Kyabu',
+      gender: 'F',
+      birthDate: '2012-07-16',
+      birthPlace: 'Butembo',
+      address: 'Binza Ozone',
+      classId: c1.id,
+      parentId: parent1.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-01`,
+    };
+
+    // Classe c2 : 8ème Éducation de Base B (7 élèves)
+    const s2_1: Student = {
+      id: 'stu-c2-1',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0201',
+      firstName: 'Moïse',
+      lastName: 'Katende',
+      postName: 'Bakajika',
+      gender: 'M',
+      birthDate: '2011-02-10',
+      birthPlace: 'Kananga',
+      address: 'Binza Delvaux',
+      classId: c2.id,
+      parentId: parent2.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-01`,
+    };
+    const s2_2: Student = {
+      id: 'stu-c2-2',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0202',
+      firstName: 'Syntyche',
+      lastName: 'Mpemba',
+      postName: 'Bazi',
+      gender: 'F',
+      birthDate: '2011-04-14',
+      birthPlace: 'Boma',
+      address: 'Kintambo Magasin',
+      classId: c2.id,
+      parentId: parent3.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-02`,
+    };
+    const s2_3: Student = {
+      id: 'stu-c2-3',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0203',
+      firstName: 'Daniel',
+      lastName: 'Mpiana',
+      postName: 'Tshiaba',
+      gender: 'M',
+      birthDate: '2011-06-25',
+      birthPlace: 'Kinshasa',
+      address: 'Selembao Cité Verte',
+      classId: c2.id,
+      parentId: parent1.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-01`,
+    };
+    const s2_4: Student = {
+      id: 'stu-c2-4',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0204',
+      firstName: 'Ketsia',
+      lastName: 'Malonda',
+      postName: 'Nimi',
+      gender: 'F',
+      birthDate: '2011-08-09',
+      birthPlace: 'Matadi',
+      address: 'Mont Ngafula',
+      classId: c2.id,
+      parentId: parent2.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-01`,
+    };
+    const s2_5: Student = {
+      id: 'stu-c2-5',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0205',
+      firstName: 'Salomon',
+      lastName: 'Kikuni',
+      postName: 'Mubake',
+      gender: 'M',
+      birthDate: '2011-10-30',
+      birthPlace: 'Kindu',
+      address: 'Bandalungwa',
+      classId: c2.id,
+      parentId: parent3.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-02`,
+    };
+    const s2_6: Student = {
+      id: 'stu-c2-6',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0206',
+      firstName: 'Jemima',
+      lastName: 'Wamba',
+      postName: 'Dia',
+      gender: 'F',
+      birthDate: '2011-12-19',
+      birthPlace: 'Kikwit',
+      address: 'Ngaliema Météo',
+      classId: c2.id,
+      parentId: parent1.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-01`,
+    };
+    const s2_7: Student = {
+      id: 'stu-c2-7',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0207',
+      firstName: 'Gédéon',
+      lastName: 'Kambale',
+      postName: 'Vahwere',
+      gender: 'M',
+      birthDate: '2011-03-05',
+      birthPlace: 'Beni',
+      address: 'Ngaliema Dumez',
+      classId: c2.id,
+      parentId: parent2.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-03`,
+    };
+
+    // Classe c4 : 2ème Commerciale & Gestion (7 élèves)
+    const s4_1: Student = {
+      id: 'stu-c4-1',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0401',
+      firstName: 'Aaron',
+      lastName: 'Boketshu',
+      postName: 'Ekofo',
+      gender: 'M',
+      birthDate: '2009-03-12',
+      birthPlace: 'Mbandaka',
+      address: 'Kintambo Jamaïque',
+      classId: c4.id,
+      parentId: parent3.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-01`,
+    };
+    const s4_2: Student = {
+      id: 'stu-c4-2',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0402',
+      firstName: 'Rebeka',
+      lastName: 'Ngoy',
+      postName: 'Wa',
+      gender: 'F',
+      birthDate: '2009-05-18',
+      birthPlace: 'Kamina',
+      address: 'Ngaliema Lalou',
+      classId: c4.id,
+      parentId: parent1.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-01`,
+    };
+    const s4_3: Student = {
+      id: 'stu-c4-3',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0403',
+      firstName: 'Caleb',
+      lastName: 'Lukoki',
+      postName: 'Makiese',
+      gender: 'M',
+      birthDate: '2009-07-22',
+      birthPlace: 'Mbanza-Ngungu',
+      address: 'Macampagne',
+      classId: c4.id,
+      parentId: parent2.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-02`,
+    };
+    const s4_4: Student = {
+      id: 'stu-c4-4',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0404',
+      firstName: 'Keren',
+      lastName: 'Monga',
+      postName: 'Ilunga',
+      gender: 'F',
+      birthDate: '2009-09-14',
+      birthPlace: 'Kolwezi',
+      address: 'Binza Pigeon',
+      classId: c4.id,
+      parentId: parent3.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-01`,
+    };
+    const s4_5: Student = {
+      id: 'stu-c4-5',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0405',
+      firstName: 'Nathan',
+      lastName: 'Banza',
+      postName: 'Mukalayi',
+      gender: 'M',
+      birthDate: '2009-11-28',
+      birthPlace: 'Lubumbashi',
+      address: 'Gombele',
+      classId: c4.id,
+      parentId: parent1.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-02`,
+    };
+    const s4_6: Student = {
+      id: 'stu-c4-6',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0406',
+      firstName: 'Ruth',
+      lastName: 'Bopili',
+      postName: 'Basele',
+      gender: 'F',
+      birthDate: '2009-01-15',
+      birthPlace: 'Gemena',
+      address: 'Binza Delvaux',
+      classId: c4.id,
+      parentId: parent2.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-01`,
+    };
+    const s4_7: Student = {
+      id: 'stu-c4-7',
+      schoolId: school1.id,
+      matricule: 'BOB-2026-0407',
+      firstName: 'Timothée',
+      lastName: 'Kambilo',
+      postName: 'Kasongo',
+      gender: 'M',
+      birthDate: '2009-04-03',
+      birthPlace: 'Bukavu',
+      address: 'Kinsuka',
+      classId: c4.id,
+      parentId: parent3.id,
+      active: true,
+      registrationDate: `${currentYearNum}-09-03`,
+    };
+
+    this.students.push(
+      s1, s3, s4, s5, s6, s7, s8, // 7 pour c3
+      s2, s1_2, s1_3, s1_4, s1_5, s1_6, s1_7, // 7 pour c1
+      s2_1, s2_2, s2_3, s2_4, s2_5, s2_6, s2_7, // 7 pour c2
+      s4_1, s4_2, s4_3, s4_4, s4_5, s4_6, s4_7  // 7 pour c4
+    );
 
     // 8. Enseignants & Personnel
     const teacher1: Teacher = {
@@ -1328,6 +1709,52 @@ class DatabaseManager {
   // Teachers & Staff
   getTeachers(schoolId: string): Teacher[] {
     return this.teachers.filter((t) => this.matchesSchool(t.schoolId, schoolId));
+  }
+
+  updateTeacher(teacherId: string, updates: Partial<Teacher>): Teacher | null {
+    const teacher = this.teachers.find((t) => t.id === teacherId);
+    if (!teacher) return null;
+    Object.assign(teacher, updates);
+    // Also sync userAccount
+    const account = this.userAccounts.find(
+      (u) => u.teacherId === teacherId || (u.email && u.email.toLowerCase() === teacher.email.toLowerCase())
+    );
+    if (account) {
+      if (updates.fullName) account.fullName = updates.fullName;
+      if (updates.email) account.email = updates.email;
+      if (updates.phone) account.phone = updates.phone;
+    }
+    return teacher;
+  }
+
+  updateUserProfile(userId: string, updates: { fullName?: string; email?: string; phone?: string }): UserSession | null {
+    const account = this.userAccounts.find((u) => u.id === userId);
+    if (!account) return null;
+    if (updates.fullName) account.fullName = updates.fullName;
+    if (updates.email) account.email = updates.email;
+    if (updates.phone) account.phone = updates.phone;
+
+    if (account.teacherId) {
+      const t = this.teachers.find((tch) => tch.id === account.teacherId);
+      if (t) {
+        if (updates.fullName) t.fullName = updates.fullName;
+        if (updates.email) t.email = updates.email;
+        if (updates.phone) t.phone = updates.phone;
+      }
+    }
+    return {
+      id: account.id,
+      fullName: account.fullName,
+      username: account.username,
+      email: account.email || '',
+      phone: account.phone || '',
+      role: account.role,
+      schoolId: account.schoolId,
+      schoolName: this.schools.find((s) => s.id === account.schoolId)?.name || 'Masomo RDC',
+      studentId: account.studentId,
+      teacherId: account.teacherId,
+      token: `masomo_token_${account.id}`,
+    };
   }
 
   getStaff(schoolId: string): Staff[] {

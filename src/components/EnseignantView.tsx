@@ -53,6 +53,7 @@ import {
   Check,
   X,
   FileCheck,
+  Plus,
 } from 'lucide-react';
 
 interface EnseignantViewProps {
@@ -117,7 +118,7 @@ export const EnseignantView = ({
   // Navigation: The 6 main buttons defined in Section 15 of Cahier des Charges + Espace Titulaire
   const [internalTab, setInternalTab] = useState<
     'classes' | 'attendance' | 'grades' | 'titulaire' | 'subjects' | 'schedule' | 'messages'
-  >('attendance');
+  >('classes');
 
   const activeTab = controlledTab ?? internalTab;
   const setActiveTab = (tab: 'classes' | 'attendance' | 'grades' | 'titulaire' | 'subjects' | 'schedule' | 'messages') => {
@@ -219,8 +220,24 @@ export const EnseignantView = ({
   // Selected state filters
   const [selectedClassId, setSelectedClassId] = useState<string>(activeClassList[0]?.id || classes[0]?.id || '');
   const [activeClassView, setActiveClassView] = useState<'list' | 'detail'>('list');
+  const [classSubTab, setClassSubTab] = useState<'appel' | 'notes' | 'cahier' | 'eleves'>('appel');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id || '');
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>(periods[0]?.id || '');
+
+  // Helper: check if class is 7ème or 8ème Éducation de Base (tronc commun sans option)
+  const isEbClass = (cls: SchoolClass | undefined | null) => {
+    if (!cls) return false;
+    const lvl = (cls.level || '').toLowerCase();
+    const name = (cls.name || '').toLowerCase();
+    return (
+      lvl.includes('7') ||
+      lvl.includes('8') ||
+      name.includes('7') ||
+      name.includes('8') ||
+      lvl.includes('eb') ||
+      name.includes('base')
+    );
+  };
 
   // Dynamic system date (NEVER HARDCODED)
   const systemTodayStr = new Date().toISOString().split('T')[0];
@@ -916,234 +933,63 @@ export const EnseignantView = ({
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* ========================================================= */}
-      {/* 1. HEADER SECTION: Mobile-clean with Essential Details    */}
-      {/* ========================================================= */}
-      <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
-                Espace Enseignant
-              </span>
-              <div
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border ${
-                  isOnline
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-amber-50 text-amber-700 border-amber-200'
-                }`}
-              >
-                {isOnline ? (
-                  <Wifi className="w-3 h-3 text-emerald-600" />
-                ) : (
-                  <WifiOff className="w-3 h-3 text-amber-600" />
-                )}
-                <span>{isOnline ? 'En ligne' : 'Hors-ligne'}</span>
-              </div>
-              {hasOfflineChanges && (
-                <button
-                  id="btn-sync-offline-cache"
-                  onClick={syncOfflineData}
-                  className="px-2 py-0.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium flex items-center gap-1 transition-colors"
-                >
-                  <RotateCw className="w-3 h-3 animate-spin" />
-                  <span>Synchroniser</span>
-                </button>
-              )}
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight mt-1.5">
-              Bonjour, {teacherName}
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5 capitalize">
-              {formattedToday} • {teacherSpecialty} • {school.name}
-            </p>
-          </div>
-
-          {/* Quick Metrics Bar - Mobile friendly 4-grid */}
-          <div className="grid grid-cols-4 gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2 text-center">
-              <span className="text-[10px] text-slate-500 font-medium block">Classes</span>
-              <span className="text-base font-bold text-slate-900">{activeClassList.length}</span>
-            </div>
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2 text-center">
-              <span className="text-[10px] text-slate-500 font-medium block">Élèves</span>
-              <span className="text-base font-bold text-blue-600">
-                {activeClassList.reduce(
-                  (acc, cls) => acc + students.filter((s) => s.classId === cls.id).length,
-                  0
-                )}
-              </span>
-            </div>
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2 text-center">
-              <span className="text-[10px] text-slate-500 font-medium block">Matières</span>
-              <span className="text-base font-bold text-slate-900">{subjects.length}</span>
-            </div>
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2 text-center">
-              <span className="text-[10px] text-slate-500 font-medium block">Messages</span>
-              <span className="text-base font-bold text-indigo-600">
-                {messages.filter((m) => !m.read).length}
-              </span>
-            </div>
-          </div>
+      {/* Toast Notification */}
+      {noticeMessage && (
+        <div
+          id="enseignant-toast-notice"
+          className={`p-3 rounded-lg border text-xs font-semibold flex items-center gap-2 transition-all ${
+            noticeType === 'success'
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+              : 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800 text-red-900 dark:text-red-200'
+          }`}
+        >
+          {noticeType === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+          )}
+          <span className="flex-1">{noticeMessage}</span>
         </div>
+      )}
 
-        {/* Global Floating Notification */}
-        {noticeMessage && (
-          <div
-            id="enseignant-toast-notice"
-            className={`mt-3 p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all animate-in fade-in slide-in-from-top-1 ${
-              noticeType === 'success'
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                : 'bg-red-50 border-red-200 text-red-900'
-            }`}
-          >
-            {noticeType === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            ) : (
-              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-            )}
-            <span className="flex-1">{noticeMessage}</span>
-          </div>
-        )}
-      </div>
-
-      {/* ========================================================= */}
-      {/* 2. THE NAVIGATION TABS (Mobile / Quick Switcher)           */}
-      {/* ========================================================= */}
-      <div className="bg-white rounded-2xl p-1.5 shadow-xs border border-slate-200">
-        <div className="grid grid-cols-4 sm:grid-cols-7 gap-1 sm:gap-1.5">
-          {/* Button 1: Mes classes */}
+      {/* Offline Sync Banner if offline changes exist */}
+      {hasOfflineChanges && (
+        <div className="p-2.5 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between">
+          <span className="font-medium">Modifications locales en attente de synchronisation.</span>
           <button
-            id="btn-nav-classes"
-            onClick={() => setActiveTab('classes')}
-            className={`flex flex-col sm:flex-row items-center justify-center p-2 rounded-xl transition-all text-xs font-medium text-center gap-1 sm:gap-1.5 ${
-              activeTab === 'classes'
-                ? 'bg-blue-600 text-white shadow-xs font-semibold'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
+            id="btn-sync-offline-cache"
+            onClick={syncOfflineData}
+            className="px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors"
           >
-            <Users className="w-4 h-4" />
-            <span>Classes</span>
-          </button>
-
-          {/* Button 2: Présences */}
-          <button
-            id="btn-nav-presences"
-            onClick={() => setActiveTab('attendance')}
-            className={`flex flex-col sm:flex-row items-center justify-center p-2 rounded-xl transition-all text-xs font-medium text-center gap-1 sm:gap-1.5 ${
-              activeTab === 'attendance'
-                ? 'bg-blue-600 text-white shadow-xs font-semibold'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <CheckSquare className="w-4 h-4" />
-            <span>Présences</span>
-          </button>
-
-          {/* Button 3: Notes & Palmarès */}
-          <button
-            id="btn-nav-notes"
-            onClick={() => setActiveTab('grades')}
-            className={`flex flex-col sm:flex-row items-center justify-center p-2 rounded-xl transition-all text-xs font-medium text-center gap-1 sm:gap-1.5 ${
-              activeTab === 'grades'
-                ? 'bg-blue-600 text-white shadow-xs font-semibold'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <Edit3 className="w-4 h-4" />
-            <span>Notes</span>
-          </button>
-
-          {/* Button 4: Espace Titulaire */}
-          <button
-            id="btn-nav-titulaire"
-            onClick={() => setActiveTab('titulaire')}
-            className={`flex flex-col sm:flex-row items-center justify-center p-2 rounded-xl transition-all text-xs font-medium text-center gap-1 sm:gap-1.5 relative ${
-              activeTab === 'titulaire'
-                ? 'bg-blue-600 text-white shadow-xs font-semibold'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <Award className="w-4 h-4 text-amber-500" />
-            <div className="flex items-center gap-1">
-              <span>Titulaire</span>
-              {isTitulaire && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              )}
-            </div>
-          </button>
-
-          {/* Button 5: Mes matières */}
-          <button
-            id="btn-nav-matieres"
-            onClick={() => setActiveTab('subjects')}
-            className={`flex flex-col sm:flex-row items-center justify-center p-2 rounded-xl transition-all text-xs font-medium text-center gap-1 sm:gap-1.5 ${
-              activeTab === 'subjects'
-                ? 'bg-blue-600 text-white shadow-xs font-semibold'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            <span>Matières</span>
-          </button>
-
-          {/* Button 6: Horaire */}
-          <button
-            id="btn-nav-horaire"
-            onClick={() => setActiveTab('schedule')}
-            className={`flex flex-col sm:flex-row items-center justify-center p-2 rounded-xl transition-all text-xs font-medium text-center gap-1 sm:gap-1.5 ${
-              activeTab === 'schedule'
-                ? 'bg-blue-600 text-white shadow-xs font-semibold'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <Clock className="w-4 h-4" />
-            <span>Horaire</span>
-          </button>
-
-          {/* Button 7: Messages */}
-          <button
-            id="btn-nav-messages"
-            onClick={() => setActiveTab('messages')}
-            className={`flex flex-col sm:flex-row items-center justify-center p-2 rounded-xl transition-all text-xs font-medium text-center gap-1 sm:gap-1.5 relative ${
-              activeTab === 'messages'
-                ? 'bg-blue-600 text-white shadow-xs font-semibold'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4" />
-            <span>Messages</span>
-            {messages.filter((m) => !m.read).length > 0 && (
-              <span className="w-2 h-2 rounded-full bg-red-500 ml-0.5" />
-            )}
+            <RotateCw className="w-3.5 h-3.5 animate-spin" />
+            <span>Synchroniser</span>
           </button>
         </div>
-      </div>
+      )}
 
       {/* ========================================================= */}
-      {/* VUE 1 : MES CLASSES                                       */}
+      {/* VUE 1 : MES CLASSES & GESTION INTÉGRÉE D'UNE CLASSE        */}
       {/* ========================================================= */}
       {activeTab === 'classes' && (
-        <div className="space-y-4 text-xs">
-          {/* ÉCRAN 1 : LISTE PURE DES CLASSES */}
+        <div className="space-y-4">
+          {/* ÉCRAN A : GRILLE DE CLASSES (2 PAR LIGNE SUR MOBILE, EN GRAND) */}
           {activeClassView === 'list' && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-base font-bold text-slate-900">Mes Classes Assignées</h2>
-                  <p className="text-slate-500 text-xs">Touchez une classe pour ouvrir sa fiche détaillée</p>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">Mes Classes</h2>
+                  <p className="text-slate-500 dark:text-slate-400 text-xs">Touchez une classe pour accéder aux présences, notes et cours</p>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold text-xs border border-indigo-100">
+                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                   {activeClassList.length} classes
                 </span>
               </div>
 
-              {/* Grille de cartes mobile-first */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {/* Grille 2 colonnes sur mobile, blocs grands et clairs */}
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
                 {activeClassList.map((cls) => {
                   const studentsInThisClass = students.filter((s) => s.classId === cls.id);
-                  const boysCount = studentsInThisClass.filter((s) => s.gender === 'M').length;
-                  const girlsCount = studentsInThisClass.filter((s) => s.gender === 'F').length;
+                  const isEb = isEbClass(cls);
 
                   return (
                     <div
@@ -1152,36 +998,28 @@ export const EnseignantView = ({
                       onClick={() => {
                         setSelectedClassId(cls.id);
                         setActiveClassView('detail');
+                        setClassSubTab('appel');
                       }}
-                      className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group active:scale-[0.99]"
+                      className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-400 dark:hover:border-slate-600 shadow-xs cursor-pointer flex flex-col justify-between min-h-[140px] transition-all active:scale-[0.98] group"
                     >
                       <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-100 text-indigo-800">
-                            {cls.level}
-                          </span>
-                          <span className="text-xs text-slate-500 font-medium">{cls.roomNumber || 'Salle principale'}</span>
-                        </div>
-
-                        <div className="mt-2.5 flex items-center justify-between">
-                          <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                        <div className="flex items-start justify-between gap-1">
+                          <span className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                             {cls.name}
-                          </h3>
-                          <div className="w-7 h-7 rounded-full bg-slate-50 group-hover:bg-indigo-50 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 transition-colors">
-                            <ChevronRight className="w-4 h-4" />
-                          </div>
+                          </span>
                         </div>
-                        <p className="text-slate-500 text-xs mt-0.5">{cls.section}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+                          {isEb ? 'Éducation de Base (Pas d’option)' : (cls.section ? `Option : ${cls.section}` : 'Option : Scientifique')}
+                        </p>
                       </div>
 
-                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-slate-600">
-                        <div className="flex items-center gap-1.5">
-                          <Users className="w-4 h-4 text-indigo-500" />
-                          <span><strong className="text-slate-900 font-bold">{studentsInThisClass.length}</strong> élèves inscrits</span>
-                        </div>
-                        <div className="text-[11px] text-slate-400 font-medium">
-                          {boysCount} G • {girlsCount} F
-                        </div>
+                      <div className="mt-4 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400">
+                        <span className="font-semibold text-slate-900 dark:text-slate-200">
+                          {studentsInThisClass.length} élèves
+                        </span>
+                        <span className="text-slate-400 text-[10px]">
+                          {cls.roomNumber || 'Salle'}
+                        </span>
                       </div>
                     </div>
                   );
@@ -1190,187 +1028,538 @@ export const EnseignantView = ({
             </div>
           )}
 
-          {/* ÉCRAN 2 : PAGE DÉDIÉE À LA CLASSE SÉLECTIONNÉE */}
-          {activeClassView === 'detail' && (
+          {/* ÉCRAN B : PAGE DÉDIÉE À LA CLASSE SÉLECTIONNÉE */}
+          {activeClassView === 'detail' && selectedClass && (
             <div className="space-y-4">
-              {/* Barre de retour type application mobile */}
-              <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <button
-                    id="btn-back-to-classes-list"
-                    onClick={() => setActiveClassView('list')}
-                    className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors flex items-center gap-1 font-bold text-xs shrink-0"
-                    title="Retourner à la liste des classes"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Retour</span>
-                  </button>
+              {/* Entête de la classe sélectionnée */}
+              <div className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <button
+                      id="btn-back-to-classes-list"
+                      onClick={() => setActiveClassView('list')}
+                      className="px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                      title="Retourner à la liste de mes classes"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Retour aux classes</span>
+                    </button>
 
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-base font-bold text-slate-900">
-                        {selectedClass?.name || 'Classe sélectionnée'}
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
+                        {selectedClass.name}
                       </h2>
-                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-100 text-indigo-800">
-                        {selectedClass?.level}
-                      </span>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {isEbClass(selectedClass)
+                          ? 'Tronc Commun • Éducation de Base (Pas d’option)'
+                          : `Option attribuée par la Direction : ${selectedClass.section || 'Scientifique'}`}
+                        {' • '}{classStudents.length} élèves inscrits
+                      </p>
                     </div>
-                    <p className="text-slate-500 text-xs">
-                      {selectedClass?.section} • {selectedClass?.roomNumber || 'Salle principale'} • {classStudents.length} élèves inscrits
-                    </p>
+                  </div>
+
+                  {/* Choix du cours attribué à la classe par le Directeur */}
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="select-class-course" className="text-xs font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                      Cours attribué :
+                    </label>
+                    <select
+                      id="select-class-course"
+                      value={selectedSubjectId}
+                      onChange={(e) => setSelectedSubjectId(e.target.value)}
+                      className="w-full sm:w-auto px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-slate-900"
+                    >
+                      {subjects.map((sub) => (
+                        <option key={sub.id} value={sub.id}>
+                          {sub.name} (Coef {sub.defaultCoefficient || 1}, Max {sub.defaultMaxScore || 20})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
-                {/* Raccourcis directs vers Présences et Notes pour cette classe */}
-                <div className="flex items-center gap-2">
+                {/* 4 Boutons de navigation interne pour cette classe */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
                   <button
-                    id={`btn-detail-call-${selectedClass.id}`}
-                    onClick={() => {
-                      setActiveTab('attendance');
-                    }}
-                    className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors"
+                    id="subtab-class-appel"
+                    onClick={() => setClassSubTab('appel')}
+                    className={`py-2 px-3 rounded-md text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+                      classSubTab === 'appel'
+                        ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
                   >
-                    <CheckSquare className="w-4 h-4" />
+                    <CheckSquare className="w-3.5 h-3.5" />
                     <span>Faire l'appel</span>
                   </button>
 
                   <button
-                    id={`btn-detail-grades-${selectedClass.id}`}
-                    onClick={() => {
-                      setActiveTab('grades');
-                    }}
-                    className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors"
+                    id="subtab-class-notes"
+                    onClick={() => setClassSubTab('notes')}
+                    className={`py-2 px-3 rounded-md text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+                      classSubTab === 'notes'
+                        ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
                   >
-                    <Edit3 className="w-4 h-4" />
+                    <Edit3 className="w-3.5 h-3.5" />
                     <span>Saisir les notes</span>
+                  </button>
+
+                  <button
+                    id="subtab-class-cahier"
+                    onClick={() => setClassSubTab('cahier')}
+                    className={`py-2 px-3 rounded-md text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+                      classSubTab === 'cahier'
+                        ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Cahier de textes</span>
+                  </button>
+
+                  <button
+                    id="subtab-class-eleves"
+                    onClick={() => setClassSubTab('eleves')}
+                    className={`py-2 px-3 rounded-md text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+                      classSubTab === 'eleves'
+                        ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Élèves ({classStudents.length})</span>
                   </button>
                 </div>
               </div>
 
-              {/* Contenu spécifique de la classe : Répertoire des élèves */}
-              <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">
-                      Élèves inscrits en {selectedClass?.name}
-                    </h3>
-                    <p className="text-slate-500 text-xs">
-                      Consultez les coordonnées parentales, le statut d'assiduité et les actions individuelles
-                    </p>
+              {/* SOUS-VUE 1 : FAIRE L'APPEL (PLEINE LARGEUR, AUCUN DÉFILEMENT HORIZONTAL) */}
+              {classSubTab === 'appel' && (
+                <div className="w-full space-y-3">
+                  {/* Contrôles de date, heure et boutons globaux */}
+                  <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                      <div>
+                        <label htmlFor="input-class-attendance-date" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                          Date du jour
+                        </label>
+                        <input
+                          id="input-class-attendance-date"
+                          type="date"
+                          value={attendanceDate}
+                          onChange={(e) => setAttendanceDate(e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="select-class-attendance-slot" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                          Créneau horaire
+                        </label>
+                        <select
+                          id="select-class-attendance-slot"
+                          value={attendanceTimeSlot}
+                          onChange={(e) => setAttendanceTimeSlot(e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
+                        >
+                          <option value="07h30 - 08h25 (1ère Heure)">07h30 - 08h25 (1ère Heure)</option>
+                          <option value="08h25 - 09h20 (2ème Heure)">08h25 - 09h20 (2ème Heure)</option>
+                          <option value="09h40 - 10h35 (3ème Heure)">09h40 - 10h35 (3ème Heure)</option>
+                          <option value="10h35 - 11h30 (4ème Heure)">10h35 - 11h30 (4ème Heure)</option>
+                          <option value="11h30 - 12h25 (5ème Heure)">11h30 - 12h25 (5ème Heure)</option>
+                          <option value="Appel Général Journée">Appel Général Journée</option>
+                        </select>
+                      </div>
+
+                      <div className="flex items-end gap-2">
+                        <button
+                          type="button"
+                          id="btn-class-mark-all-present"
+                          onClick={() => handleSetAllAttendance('present')}
+                          className="flex-1 py-2 px-2.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1"
+                        >
+                          <UserCheck className="w-3.5 h-3.5" />
+                          <span>Tous Présents</span>
+                        </button>
+                        <button
+                          type="button"
+                          id="btn-class-mark-all-absent"
+                          onClick={() => handleSetAllAttendance('absent')}
+                          className="flex-1 py-2 px-2.5 rounded-md border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40 dark:hover:text-red-300 text-slate-700 dark:text-slate-300 font-semibold text-xs transition-colors"
+                        >
+                          Tous Absents
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Résumé assiduité */}
+                    <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs font-medium text-slate-600 dark:text-slate-400">
+                      <span>Présents : <strong className="text-emerald-600 dark:text-emerald-400">{countPresent}</strong></span>
+                      <span>•</span>
+                      <span>Retards : <strong className="text-amber-600 dark:text-amber-400">{countRetard}</strong></span>
+                      <span>•</span>
+                      <span>Absents : <strong className="text-red-600 dark:text-red-400">{countAbsent}</strong></span>
+                    </div>
                   </div>
 
-                  {/* Recherche rapide */}
-                  <div className="relative w-full sm:w-64">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                    <input
-                      id="input-search-student-class"
-                      type="text"
-                      placeholder="Rechercher par nom ou matricule..."
-                      value={studentSearchTerm}
-                      onChange={(e) => setStudentSearchTerm(e.target.value)}
-                      className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                    />
+                  {/* Liste des élèves : cartes pleine largeur, 3 boutons confortables au toucher, zéro scroll horizontal */}
+                  <div className="space-y-2">
+                    {classStudents.map((stu) => {
+                      const currentStatus = attendanceDraft[stu.id]?.status || 'present';
+                      const currentJustif = attendanceDraft[stu.id]?.justification || '';
+
+                      return (
+                        <div
+                          key={stu.id}
+                          className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors"
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-slate-900 dark:text-white">
+                                {stu.lastName} {stu.postName} {stu.firstName}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                ({stu.gender === 'F' ? 'Fille' : 'Garçon'})
+                              </span>
+                            </div>
+                            <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                              {stu.matricule}
+                            </span>
+                          </div>
+
+                          {/* 3 boutons prenant 100% de la largeur */}
+                          <div className="grid grid-cols-3 gap-2">
+                            <button
+                              type="button"
+                              id={`btn-att-p-${stu.id}`}
+                              onClick={() => handleSetStudentAttendanceStatus(stu.id, 'present')}
+                              className={`py-2 rounded-md font-bold text-xs transition-colors flex items-center justify-center gap-1 ${
+                                currentStatus === 'present'
+                                  ? 'bg-emerald-600 text-white shadow-xs'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                              }`}
+                            >
+                              ✓ Présent
+                            </button>
+                            <button
+                              type="button"
+                              id={`btn-att-r-${stu.id}`}
+                              onClick={() => handleSetStudentAttendanceStatus(stu.id, 'retard')}
+                              className={`py-2 rounded-md font-bold text-xs transition-colors flex items-center justify-center gap-1 ${
+                                currentStatus === 'retard'
+                                  ? 'bg-amber-500 text-white shadow-xs'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                              }`}
+                            >
+                              ⏱ Retard
+                            </button>
+                            <button
+                              type="button"
+                              id={`btn-att-a-${stu.id}`}
+                              onClick={() => handleSetStudentAttendanceStatus(stu.id, 'absent')}
+                              className={`py-2 rounded-md font-bold text-xs transition-colors flex items-center justify-center gap-1 ${
+                                currentStatus === 'absent'
+                                  ? 'bg-red-600 text-white shadow-xs'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-red-50 dark:hover:bg-red-950/40'
+                              }`}
+                            >
+                              ✗ Absent
+                            </button>
+                          </div>
+
+                          {/* Motif si absent ou retard */}
+                          {(currentStatus === 'absent' || currentStatus === 'retard') && (
+                            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                              <input
+                                id={`input-att-justif-${stu.id}`}
+                                type="text"
+                                placeholder="Motif d'absence ou retard (optionnel)..."
+                                value={currentJustif}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setAttendanceDraft((prev) => ({
+                                    ...prev,
+                                    [stu.id]: {
+                                      status: prev[stu.id]?.status || 'present',
+                                      justification: val,
+                                    },
+                                  }));
+                                }}
+                                className="w-full px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-slate-100 outline-none"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Bouton d'enregistrement pleine largeur en bas */}
+                  <div className="pt-2 sticky bottom-16 sm:bottom-0 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-sm pb-4">
+                    <button
+                      type="button"
+                      id="btn-save-attendance-main"
+                      onClick={handleSaveAttendance}
+                      className="w-full py-3 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-sm shadow-md hover:opacity-95 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>ENREGISTRER L'APPEL ({classStudents.length} ÉLÈVES)</span>
+                    </button>
                   </div>
                 </div>
+              )}
 
-                <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-100 text-slate-700 font-semibold">
-                        <th className="py-2.5 px-3">Matricule</th>
-                        <th className="py-2.5 px-3">Nom, Post-nom & Prénom</th>
-                        <th className="py-2.5 px-3 text-center">Genre</th>
-                        <th className="py-2.5 px-3">Parent / Tuteur & Contact</th>
-                        <th className="py-2.5 px-3 text-center">Assiduité Récente</th>
-                        <th className="py-2.5 px-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
+              {/* SOUS-VUE 2 : SAISIR LES NOTES (PLEINE LARGEUR) */}
+              {classSubTab === 'notes' && (
+                <div className="w-full space-y-3">
+                  <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div>
+                        <label htmlFor="select-class-notes-period" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                          Période scolaire
+                        </label>
+                        <select
+                          id="select-class-notes-period"
+                          value={selectedPeriodId}
+                          onChange={(e) => setSelectedPeriodId(e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-white"
+                        >
+                          {periods.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} ({p.code})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label htmlFor="input-class-notes-title" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                          Titre de l'évaluation
+                        </label>
+                        <input
+                          id="input-class-notes-title"
+                          type="text"
+                          value={evaluationTitle}
+                          onChange={(e) => setEvaluationTitle(e.target.value)}
+                          placeholder="Ex: Interrogation n°1..."
+                          className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <span className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                          Barème maximum
+                        </span>
+                        <div className="px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200">
+                          Sur {currentMaxScore} points (Coef {currentCoefficient})
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lignes de saisie par élève */}
+                  <div className="space-y-2">
+                    {classStudents.map((stu, idx) => {
+                      const currentScore = gradeInputState[stu.id] !== undefined ? gradeInputState[stu.id] : '';
+                      return (
+                        <div
+                          key={stu.id}
+                          className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3"
+                        >
+                          <div>
+                            <div className="font-bold text-sm text-slate-900 dark:text-white">
+                              {stu.lastName} {stu.postName} {stu.firstName}
+                            </div>
+                            <div className="text-[11px] text-slate-400 font-mono">
+                              {stu.matricule}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <input
+                              id={`input-score-${idx}`}
+                              type="number"
+                              min="0"
+                              max={currentMaxScore}
+                              step="0.5"
+                              placeholder={`/ ${currentMaxScore}`}
+                              value={currentScore}
+                              onChange={(e) => handleScoreChange(stu.id, e.target.value)}
+                              onKeyDown={(e) => handleScoreKeyDown(e, idx)}
+                              className="w-24 text-center py-2 px-2 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <span className="text-xs text-slate-500">/ {currentMaxScore}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Bouton enregistrement des cotes */}
+                  <div className="pt-2 sticky bottom-16 sm:bottom-0 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-sm pb-4">
+                    <button
+                      type="button"
+                      id="btn-save-grades-main"
+                      onClick={() => handleSaveGradesAs('draft')}
+                      className="w-full py-3 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-sm shadow-md hover:opacity-95 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>ENREGISTRER LES COTES ({enteredScores.length}/{classStudents.length} SAISIES)</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* SOUS-VUE 3 : CAHIER DE TEXTES (PLEINE LARGEUR) */}
+              {classSubTab === 'cahier' && (
+                <div className="w-full space-y-4">
+                  <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 space-y-3">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Remplir le cahier de textes • {selectedSubject?.name}
+                    </h3>
+                    <div className="space-y-2.5">
+                      <div>
+                        <label htmlFor="input-class-lesson-title" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                          Titre de la leçon / Chapitre
+                        </label>
+                        <input
+                          id="input-class-lesson-title"
+                          type="text"
+                          placeholder="Ex: Équations du second degré..."
+                          value={newLessonTitle}
+                          onChange={(e) => setNewLessonTitle(e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="textarea-class-lesson-summary" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                          Résumé de la matière dispensée
+                        </label>
+                        <textarea
+                          id="textarea-class-lesson-summary"
+                          rows={3}
+                          placeholder="Points essentiels abordés durant le cours..."
+                          value={newLessonSummary}
+                          onChange={(e) => setNewLessonSummary(e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="input-class-lesson-homework" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                          Devoir / Travail à domicile (TAD)
+                        </label>
+                        <input
+                          id="input-class-lesson-homework"
+                          type="text"
+                          placeholder="Exercices n° 1 à 4 page 45..."
+                          value={newLessonHomework}
+                          onChange={(e) => setNewLessonHomework(e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        id="btn-save-lesson-entry"
+                        onClick={handleAddLessonLog}
+                        className="w-full py-2.5 rounded-md bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-xs transition-opacity hover:opacity-90 flex items-center justify-center gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Enregistrer la leçon au cahier de textes</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Historique des leçons */}
+                  <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 space-y-3">
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                      Historique des séances ({lessonLogs.filter(l => l.classId === selectedClass.id).length})
+                    </h4>
+                    <div className="space-y-2">
+                      {lessonLogs.filter(l => l.classId === selectedClass.id).map((log) => (
+                        <div key={log.id} className="p-3 rounded-md border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+                          <div className="flex items-center justify-between text-xs font-semibold">
+                            <span className="text-slate-900 dark:text-white">{log.title}</span>
+                            <span className="text-slate-500 font-mono text-[11px]">{log.date}</span>
+                          </div>
+                          <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">{log.summary}</p>
+                          {log.homework && (
+                            <p className="text-[11px] text-blue-600 dark:text-blue-400 mt-1 font-medium">
+                              Devoir : {log.homework}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SOUS-VUE 4 : ÉLÈVES DE LA CLASSE (PLEINE LARGEUR) */}
+              {classSubTab === 'eleves' && (
+                <div className="w-full space-y-3">
+                  <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                          Répertoire des élèves • {selectedClass.name}
+                        </h3>
+                        <p className="text-slate-500 text-xs">
+                          {classStudents.length} élèves inscrits
+                        </p>
+                      </div>
+                      <div className="relative w-full sm:w-64">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                        <input
+                          type="text"
+                          placeholder="Rechercher par nom ou matricule..."
+                          value={studentSearchTerm}
+                          onChange={(e) => setStudentSearchTerm(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 text-xs rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2">
                       {filteredStudents.map((stu) => {
                         const parent = parents.find((p) => p.id === stu.parentId || p.studentIds.includes(stu.id));
-                        const recentAtt = attendance.find((a) => a.studentId === stu.id);
-
                         return (
-                          <tr key={stu.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="py-2.5 px-3 font-mono font-medium text-slate-700">
-                              {stu.matricule}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="font-bold text-slate-900">
+                          <div
+                            key={stu.id}
+                            className="p-3 rounded-md border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                          >
+                            <div>
+                              <div className="font-bold text-sm text-slate-900 dark:text-white">
                                 {stu.lastName} {stu.postName} {stu.firstName}
                               </div>
-                              <div className="text-[11px] text-slate-400">Né(e) le {stu.birthDate} à {stu.birthPlace}</div>
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  stu.gender === 'F' ? 'bg-pink-100 text-pink-800' : 'bg-blue-100 text-blue-800'
-                                }`}
-                              >
-                                {stu.gender === 'F' ? 'Fille' : 'Garçon'}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="text-slate-800 font-medium">{parent?.fullName || 'Parent non renseigné'}</div>
-                              {parent?.phone && (
-                                <a
-                                  href={`tel:${parent.phone}`}
-                                  className="text-indigo-600 hover:underline text-[11px] flex items-center gap-1 mt-0.5"
-                                >
-                                  <PhoneCall className="w-3 h-3" />
-                                  <span>{parent.phone}</span>
-                                </a>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                  recentAtt?.status === 'present'
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : recentAtt?.status === 'absent'
-                                    ? 'bg-red-100 text-red-800'
-                                    : 'bg-amber-100 text-amber-800'
-                                }`}
-                              >
-                                {recentAtt?.status === 'present'
-                                  ? 'Présent'
-                                  : recentAtt?.status === 'absent'
-                                  ? 'Absent'
-                                  : 'En règle'}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <div className="inline-flex items-center gap-1.5">
-                                <button
-                                  id={`btn-report-incident-cls-${stu.id}`}
-                                  onClick={() => openIncidentModal(stu)}
-                                  className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 font-semibold text-[11px] inline-flex items-center gap-1 transition-colors"
-                                  title="Signaler un incident au Directeur de Discipline (Article 14)"
-                                >
-                                  <ShieldAlert className="w-3 h-3 text-red-600" />
-                                  <span>Signaler incident</span>
-                                </button>
-                                <button
-                                  id={`btn-msg-parent-${stu.id}`}
-                                  onClick={() => {
-                                    setActiveTab('messages');
-                                    setNewMsgRecipientType('parents');
-                                    setNewMsgSubject(`Suivi pédagogique de l'élève ${stu.firstName} ${stu.lastName}`);
-                                    setIsComposingMessage(true);
-                                  }}
-                                  className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-[11px] transition-colors"
-                                >
-                                  Écrire au parent
-                                </button>
+                              <div className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">
+                                {stu.matricule} • {stu.gender === 'F' ? 'Fille' : 'Garçon'} • Né(e) le {stu.birthDate}
                               </div>
-                            </td>
-                          </tr>
+                              {parent && (
+                                <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
+                                  Parent : {parent.fullName} ({parent.phone})
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5 self-end sm:self-center">
+                              <button
+                                type="button"
+                                id={`btn-report-incident-cls-${stu.id}`}
+                                onClick={() => openIncidentModal(stu)}
+                                className="px-2.5 py-1 rounded-md bg-red-50 dark:bg-red-950/40 hover:bg-red-100 text-red-700 dark:text-red-300 font-semibold text-xs inline-flex items-center gap-1 transition-colors"
+                              >
+                                <ShieldAlert className="w-3.5 h-3.5 text-red-600" />
+                                <span>Discipline</span>
+                              </button>
+                            </div>
+                          </div>
                         );
                       })}
-                    </tbody>
-                  </table>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
