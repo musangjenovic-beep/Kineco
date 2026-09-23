@@ -5,25 +5,39 @@ import { createServer as createViteServer } from 'vite';
 import { db } from './server/db.ts';
 import { dataService, checkSupabaseConnection, seedSupabaseIfEmpty } from './server/supabase.ts';
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+export const app = express();
 
-  app.use(express.json());
+app.use(express.json());
 
-  // Background connection check & auto-seeding
-  checkSupabaseConnection().then(async (status) => {
-    if (status.connected) {
-      console.log('[Supabase] Connection verified successfully! Checking seed status...');
-      await seedSupabaseIfEmpty();
-    } else {
-      console.log('[Supabase] Status:', status.error || 'Standby mode');
-    }
-  }).catch((err) => console.warn('[Supabase] Background check failed:', err.message));
+// URL normalizer for Vercel Serverless Function rewrites
+app.use((req: Request, _res: Response, next: any) => {
+  if (
+    !req.url.startsWith('/api') &&
+    !req.url.startsWith('/@') &&
+    !req.url.startsWith('/src') &&
+    !req.url.startsWith('/dist') &&
+    !req.url.startsWith('/node_modules') &&
+    !req.url.startsWith('/index.html') &&
+    req.url !== '/'
+  ) {
+    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+  }
+  next();
+});
 
-  // -------------------------------------------------------------
-  // API ROUTES
-  // -------------------------------------------------------------
+// Background connection check & auto-seeding
+checkSupabaseConnection().then(async (status) => {
+  if (status.connected) {
+    console.log('[Supabase] Connection verified successfully! Checking seed status...');
+    await seedSupabaseIfEmpty();
+  } else {
+    console.log('[Supabase] Status:', status.error || 'Standby mode');
+  }
+}).catch((err) => console.warn('[Supabase] Background check failed:', err.message));
+
+// -------------------------------------------------------------
+// API ROUTES
+// -------------------------------------------------------------
   app.get('/api/health', async (req: Request, res: Response) => {
     const supabaseStatus = await checkSupabaseConnection();
     const schools = await dataService.getSchools();
@@ -783,6 +797,9 @@ async function startServer() {
   // -------------------------------------------------------------
   // VITE MIDDLEWARE (Development) or STATIC ASSETS (Production)
   // -------------------------------------------------------------
+export async function startServer() {
+  const PORT = Number(process.env.PORT) || 3000;
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -802,4 +819,9 @@ async function startServer() {
   });
 }
 
-startServer();
+// In local dev & standalone node run, start listening. On Vercel, serverless function exports app.
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;

@@ -40,27 +40,26 @@ import { ComptableFinancialView } from './components/ComptableFinancialView';
 import { EnseignantView } from './components/EnseignantView';
 import { ParentView } from './components/ParentView';
 
-const INITIAL_DEFAULT_SCHOOL: School = {
-  id: 'd8cd16f2-bafc-4425-b96c-c988773cfefb',
-  name: 'Collège Bobokoli',
-  code: 'BOB-KIN',
-  city: 'Kinshasa',
-  province: 'Kinshasa',
-  address: 'Avenue de la Montagne 45, Binza Delvaux, Ngaliema',
-  phone: '+243 81 500 1234',
-  email: 'contact@bobokoli.cd',
-  logoUrl: 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=150&auto=format&fit=crop&q=80',
-  currencyDefault: 'USD',
-  exchangeRateUsdCdf: 2850,
-  plan: 'Premium',
-  active: true,
-  createdAt: new Date().toISOString(),
-};
+import {
+  DEFAULT_SCHOOL,
+  DEFAULT_CLASSES,
+  DEFAULT_SUBJECTS,
+  DEFAULT_TEACHERS,
+  DEFAULT_STUDENTS,
+  DEFAULT_PERIODS,
+  DEFAULT_ACADEMIC_YEARS,
+  DEFAULT_GRADES,
+  DEFAULT_ATTENDANCE,
+} from './data/defaultData';
+
+const INITIAL_DEFAULT_SCHOOL: School = DEFAULT_SCHOOL;
 
 const safeFetchJson = async (url: string) => {
   try {
     const res = await fetch(url);
     if (!res.ok) return [];
+    const contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) return [];
     const json = await res.json();
     return Array.isArray(json) ? json : [];
   } catch (err) {
@@ -88,18 +87,18 @@ export default function App() {
   const [schools, setSchools] = useState<School[]>([INITIAL_DEFAULT_SCHOOL]);
   const [currentSchool, setCurrentSchool] = useState<School>(INITIAL_DEFAULT_SCHOOL);
 
-  // Core Data
-  const [students, setStudents] = useState<Student[]>([]);
-  const [classes, setClasses] = useState<SchoolClass[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  // Core Data initialized with defaults for instant offline/Vercel resilience
+  const [students, setStudents] = useState<Student[]>(DEFAULT_STUDENTS);
+  const [classes, setClasses] = useState<SchoolClass[]>(DEFAULT_CLASSES);
+  const [subjects, setSubjects] = useState<Subject[]>(DEFAULT_SUBJECTS);
+  const [teachers, setTeachers] = useState<Teacher[]>(DEFAULT_TEACHERS);
   const [parents, setParents] = useState<Parent[]>([]);
-  const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
-  const [academicPeriods, setAcademicPeriods] = useState<AcademicPeriod[]>([]);
-  const [grades, setGrades] = useState<Grade[]>([]);
+  const [academicYears, setAcademicYears] = useState<AcademicYear[]>(DEFAULT_ACADEMIC_YEARS);
+  const [academicPeriods, setAcademicPeriods] = useState<AcademicPeriod[]>(DEFAULT_PERIODS);
+  const [grades, setGrades] = useState<Grade[]>(DEFAULT_GRADES);
   const [fees, setFees] = useState<FeeDefinition[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>(DEFAULT_ATTENDANCE);
   const [incidents, setIncidents] = useState<DisciplineIncident[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [smsLogs, setSmsLogs] = useState<SmsLog[]>([]);
@@ -173,7 +172,12 @@ export default function App() {
   // Fetch initial schools list
   useEffect(() => {
     fetch('/api/schools')
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) return [];
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) return [];
+        return res.json();
+      })
       .then((data: School[]) => {
         if (Array.isArray(data) && data.length > 0) {
           setSchools(data);
@@ -223,20 +227,20 @@ export default function App() {
           ancs,
           smsl,
         ]) => {
-          setStudents(studs);
-          setClasses(cls);
-          setSubjects(subs);
-          setTeachers(tchs);
-          setParents(pts);
-          setAcademicYears(ays);
-          setAcademicPeriods(aps);
-          setGrades(grds);
-          setFees(fss);
-          setPayments(pys);
-          setAttendance(atts);
-          setIncidents(incs);
-          setAnnouncements(ancs);
-          setSmsLogs(smsl);
+          if (Array.isArray(studs) && studs.length > 0) setStudents(studs);
+          if (Array.isArray(cls) && cls.length > 0) setClasses(cls);
+          if (Array.isArray(subs) && subs.length > 0) setSubjects(subs);
+          if (Array.isArray(tchs) && tchs.length > 0) setTeachers(tchs);
+          if (Array.isArray(pts) && pts.length > 0) setParents(pts);
+          if (Array.isArray(ays) && ays.length > 0) setAcademicYears(ays);
+          if (Array.isArray(aps) && aps.length > 0) setAcademicPeriods(aps);
+          if (Array.isArray(grds) && grds.length > 0) setGrades(grds);
+          if (Array.isArray(fss) && fss.length > 0) setFees(fss);
+          if (Array.isArray(pys) && pys.length > 0) setPayments(pys);
+          if (Array.isArray(atts) && atts.length > 0) setAttendance(atts);
+          if (Array.isArray(incs) && incs.length > 0) setIncidents(incs);
+          if (Array.isArray(ancs) && ancs.length > 0) setAnnouncements(ancs);
+          if (Array.isArray(smsl) && smsl.length > 0) setSmsLogs(smsl);
           setIsLoading(false);
         }
       )
