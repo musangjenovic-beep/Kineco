@@ -288,9 +288,21 @@ export const EnseignantView = ({
   const selectedPeriod: AcademicPeriod = periods.find((p) => p && p.id === selectedPeriodId) || periods[0] || fallbackPeriod;
   const classStudents = students.filter((s) => s && s.classId === selectedClass.id);
 
-  // Max score and coefficient for selected subject
-  const currentMaxScore = selectedSubject.defaultMaxScore || 20;
-  const currentCoefficient = selectedSubject.defaultCoefficient || 1;
+  // Coefficient & Barème choisis librement par l'enseignant pour la saisie de note
+  const [teacherCoefficient, setTeacherCoefficient] = useState<number>(selectedSubject?.defaultCoefficient || 1);
+  const [teacherMaxScore, setTeacherMaxScore] = useState<number>(selectedSubject?.defaultMaxScore || 20);
+
+  // Synchronisation dès que la matière sélectionnée change
+  useEffect(() => {
+    if (selectedSubject) {
+      setTeacherCoefficient(selectedSubject.defaultCoefficient || 1);
+      setTeacherMaxScore(selectedSubject.defaultMaxScore || 20);
+    }
+  }, [selectedSubjectId, selectedSubject?.defaultCoefficient, selectedSubject?.defaultMaxScore]);
+
+  // Valeurs actives utilisées pour la validation et l'enregistrement
+  const currentMaxScore = teacherMaxScore;
+  const currentCoefficient = teacherCoefficient;
 
   // Tutored class resolution safely
   const titulaireClass: SchoolClass = classes.find((c) => c && c.id === titulaireClassId) || activeTutoredClasses[0] || classes[0] || selectedClass;
@@ -1348,7 +1360,7 @@ export const EnseignantView = ({
               {classSubTab === 'notes' && (
                 <div className="w-full space-y-3">
                   <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                       <div>
                         <label htmlFor="select-class-notes-period" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                           Période scolaire
@@ -1381,13 +1393,58 @@ export const EnseignantView = ({
                         />
                       </div>
 
+                      {/* Coefficient modifiable par le professeur */}
                       <div>
-                        <span className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                          Barème maximum
-                        </span>
-                        <div className="px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200">
-                          Sur {currentMaxScore} points (Coef {currentCoefficient})
+                        <label htmlFor="input-class-notes-coeff" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                          Coefficient (choisi par vous) *
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            id="input-class-notes-coeff"
+                            type="number"
+                            min="0.5"
+                            max="10"
+                            step="0.5"
+                            value={teacherCoefficient}
+                            onChange={(e) => setTeacherCoefficient(Number(e.target.value) || 1)}
+                            className="w-16 px-2 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-center text-slate-900 dark:text-white"
+                          />
+                          <div className="flex gap-0.5">
+                            {[1, 2, 3, 4].map((cf) => (
+                              <button
+                                key={cf}
+                                type="button"
+                                onClick={() => setTeacherCoefficient(cf)}
+                                className={`px-1.5 py-1 text-[10px] rounded font-bold transition-colors ${
+                                  teacherCoefficient === cf
+                                    ? 'bg-indigo-600 text-white'
+                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                                }`}
+                              >
+                                {cf}
+                              </button>
+                            ))}
+                          </div>
                         </div>
+                      </div>
+
+                      {/* Barème maximum modifiable */}
+                      <div>
+                        <label htmlFor="select-class-notes-max" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                          Barème / Note Maximale
+                        </label>
+                        <select
+                          id="select-class-notes-max"
+                          value={teacherMaxScore}
+                          onChange={(e) => setTeacherMaxScore(Number(e.target.value))}
+                          className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-900 dark:text-white"
+                        >
+                          <option value="20">Sur 20 points (Standard)</option>
+                          <option value="40">Sur 40 points</option>
+                          <option value="50">Sur 50 points</option>
+                          <option value="10">Sur 10 points</option>
+                          <option value="100">Sur 100 points</option>
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -1973,6 +2030,98 @@ export const EnseignantView = ({
               </div>
             </div>
 
+            {/* 5. CONFIGURATION DU COEFFICIENT & BARÈME PAR LE PROFESSEUR */}
+            <div className="mt-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                    Pondération & Barème choisis par l'Enseignant
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Vous choisissez vous-même le coefficient et le barème pour cette évaluation.
+                  </p>
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 self-start sm:self-auto">
+                  Coeff actif : {teacherCoefficient} • Barème : /{teacherMaxScore} pts
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-200/70">
+                {/* Choix du coefficient */}
+                <div>
+                  <label htmlFor="input-teacher-coeff-main" className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                    Coefficient de l'évaluation (choisi par vous) *
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="input-teacher-coeff-main"
+                      type="number"
+                      min="0.5"
+                      max="10"
+                      step="0.5"
+                      value={teacherCoefficient}
+                      onChange={(e) => setTeacherCoefficient(Number(e.target.value) || 1)}
+                      className="w-20 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-bold text-center text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                    <div className="flex flex-wrap gap-1">
+                      {[1, 2, 3, 4, 5].map((cf) => (
+                        <button
+                          key={cf}
+                          type="button"
+                          onClick={() => setTeacherCoefficient(cf)}
+                          className={`px-2.5 py-1 text-xs rounded-lg font-bold transition-all ${
+                            teacherCoefficient === cf
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          Coeff {cf}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Choix du barème maximal */}
+                <div>
+                  <label htmlFor="select-teacher-maxscore-main" className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                    Barème / Note maximale de l'évaluation *
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      id="select-teacher-maxscore-main"
+                      value={teacherMaxScore}
+                      onChange={(e) => setTeacherMaxScore(Number(e.target.value))}
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-bold text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    >
+                      <option value="20">Sur 20 points</option>
+                      <option value="40">Sur 40 points</option>
+                      <option value="50">Sur 50 points</option>
+                      <option value="10">Sur 10 points</option>
+                      <option value="100">Sur 100 points</option>
+                    </select>
+                    <div className="flex flex-wrap gap-1">
+                      {[10, 20, 40, 50, 100].map((mx) => (
+                        <button
+                          key={mx}
+                          type="button"
+                          onClick={() => setTeacherMaxScore(mx)}
+                          className={`px-2 py-1 text-[11px] rounded-lg font-semibold transition-all ${
+                            teacherMaxScore === mx
+                              ? 'bg-slate-900 text-white'
+                              : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          /{mx}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Statistiques en direct */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100">
               <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
@@ -2009,7 +2158,7 @@ export const EnseignantView = ({
                     Saisie des Notes — {evaluationTitle || 'Évaluation en cours'}
                   </h3>
                   <p className="text-slate-500 text-xs">
-                    {selectedSubject?.name || 'Matière'} • {selectedPeriod?.name || 'Période'} • Maximum : {currentMaxScore} points
+                    {selectedSubject?.name || 'Matière'} • {selectedPeriod?.name || 'Période'} • Maximum : {currentMaxScore} points • Coefficient choisi : {currentCoefficient}
                   </p>
                 </div>
 

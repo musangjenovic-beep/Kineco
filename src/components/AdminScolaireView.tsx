@@ -12,7 +12,7 @@ interface AdminScolaireViewProps {
   students: Student[];
   parents: Parent[];
   onAddClass: (classData: Omit<SchoolClass, 'id' | 'schoolId'>) => Promise<void>;
-  onAddSubject: (subjectData: Omit<Subject, 'id' | 'schoolId'>) => Promise<void>;
+  onAddSubject: (subjectData: Omit<Subject, 'id' | 'schoolId'>) => Promise<Subject | void>;
   onAddPeriod: (periodData: Omit<AcademicPeriod, 'id'>) => Promise<void>;
   onUpdateSchoolSettings: (updates: Partial<School>) => Promise<void>;
   onAssignTitulaire?: (classId: string, teacherId: string) => Promise<void>;

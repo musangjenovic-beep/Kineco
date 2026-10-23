@@ -371,15 +371,29 @@ export default function App() {
     }
   };
 
-  const handleAddSubject = async (subjectData: Omit<Subject, 'id' | 'schoolId'>) => {
+  const handleAddSubject = async (subjectData: Omit<Subject, 'id' | 'schoolId'>): Promise<Subject | undefined> => {
     if (!currentSchool) return;
-    const res = await fetch('/api/subjects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...subjectData, schoolId: currentSchool.id }),
-    });
-    const created = await res.json();
-    setSubjects((prev) => [...prev, created]);
+    try {
+      const res = await fetch('/api/subjects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...subjectData, schoolId: currentSchool.id }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setSubjects((prev) => [...prev, created]);
+        return created;
+      }
+    } catch (err) {
+      console.warn('handleAddSubject error:', err);
+    }
+    const fallback: Subject = {
+      ...subjectData,
+      id: `sbj-${Date.now()}`,
+      schoolId: currentSchool.id,
+    };
+    setSubjects((prev) => [...prev, fallback]);
+    return fallback;
   };
 
   const handleAddPeriod = async (periodData: Omit<AcademicPeriod, 'id'>) => {
@@ -762,6 +776,7 @@ export default function App() {
                     onOpenUserManagement={() => setIsUserManagementOpen(true)}
                     onAssignTitulaire={handleAssignTitulaire}
                     onAssignCourse={handleAssignCourse}
+                    onAddSubject={handleAddSubject}
                   />
                 )}
 

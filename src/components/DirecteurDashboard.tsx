@@ -23,7 +23,12 @@ import {
   Award,
   BookOpen,
   Check,
-  UserPlus
+  UserPlus,
+  Plus,
+  Sparkles,
+  HelpCircle,
+  Edit3,
+  Filter
 } from 'lucide-react';
 
 interface DirecteurDashboardProps {
@@ -38,6 +43,7 @@ interface DirecteurDashboardProps {
   onOpenUserManagement?: () => void;
   onAssignTitulaire?: (classId: string, teacherId: string) => Promise<void>;
   onAssignCourse?: (classId: string, subjectId: string, teacherId: string) => Promise<void>;
+  onAddSubject?: (subjectData: Omit<Subject, 'id' | 'schoolId'>) => Promise<Subject | void>;
 }
 
 export const DirecteurDashboard = ({
@@ -52,6 +58,7 @@ export const DirecteurDashboard = ({
   onOpenUserManagement,
   onAssignTitulaire,
   onAssignCourse,
+  onAddSubject,
 }: DirecteurDashboardProps) => {
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'month' | 'year'>('month');
   const [searchStudentQuery, setSearchStudentQuery] = useState('');
@@ -61,6 +68,76 @@ export const DirecteurDashboard = ({
   const [attributionSubTab, setAttributionSubTab] = useState<'titulaires' | 'cours'>('titulaires');
   const [selectedCourseClassId, setSelectedCourseClassId] = useState<string>(classes[0]?.id || '');
   const [assignedCoursesMap, setAssignedCoursesMap] = useState<Record<string, string>>({});
+
+  // Formulaire d'attribution de cours personnalisé écrit par le Directeur
+  const [showCourseCreationForm, setShowCourseCreationForm] = useState(false);
+  const [courseNameInput, setCourseNameInput] = useState('');
+  const [courseCodeInput, setCourseCodeInput] = useState('');
+  const [courseCategoryInput, setCourseCategoryInput] = useState<Subject['category']>('Sciences');
+  const [courseCoeffInput, setCourseCoeffInput] = useState<number>(2);
+  const [courseMaxScoreInput, setCourseMaxScoreInput] = useState<number>(20);
+  const [courseTeacherIdInput, setCourseTeacherIdInput] = useState<string>('');
+  const [courseClassIdInput, setCourseClassIdInput] = useState<string>(classes[0]?.id || '');
+  const [isSubmittingCourse, setIsSubmittingCourse] = useState(false);
+  const [courseFilterSearch, setCourseFilterSearch] = useState('');
+
+  const handleCreateAndAssignCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!courseNameInput.trim()) {
+      alert('Veuillez saisir le nom du cours.');
+      return;
+    }
+
+    const targetClassId = courseClassIdInput || selectedCourseClassId || classes[0]?.id;
+    const targetClass = classes.find((c) => c.id === targetClassId) || classes[0];
+    const targetTeacher = teachers.find((t) => t.id === courseTeacherIdInput);
+
+    setIsSubmittingCourse(true);
+    try {
+      const code = courseCodeInput.trim() || courseNameInput.trim().slice(0, 4).toUpperCase();
+      let createdId = `sbj-${Date.now()}`;
+
+      if (onAddSubject) {
+        const result = await onAddSubject({
+          name: courseNameInput.trim(),
+          code,
+          category: courseCategoryInput,
+          defaultCoefficient: Number(courseCoeffInput) || 2,
+          defaultMaxScore: Number(courseMaxScoreInput) || 20,
+        });
+        if (result && typeof result === 'object' && 'id' in result) {
+          createdId = (result as Subject).id;
+        }
+      }
+
+      if (onAssignCourse && targetClassId && courseTeacherIdInput) {
+        await onAssignCourse(targetClassId, createdId, courseTeacherIdInput);
+        setAssignedCoursesMap((prev) => ({
+          ...prev,
+          [`${targetClassId}-${createdId}`]: courseTeacherIdInput,
+        }));
+      }
+
+      setTitulaireSuccessMsg(
+        `✓ Cours « ${courseNameInput.trim()} » enregistré et attribué à ${
+          targetTeacher ? targetTeacher.fullName : 'la classe'
+        } (${targetClass?.name}). Le professeur pourra lui-même choisir ou moduler le coefficient lors de la saisie de notes.`
+      );
+      setTimeout(() => setTitulaireSuccessMsg(null), 5000);
+
+      // Reset form
+      setCourseNameInput('');
+      setCourseCodeInput('');
+      setCourseCoeffInput(2);
+      setCourseMaxScoreInput(20);
+      setCourseTeacherIdInput('');
+      setShowCourseCreationForm(false);
+    } catch (err) {
+      console.error('Error creating course:', err);
+    } finally {
+      setIsSubmittingCourse(false);
+    }
+  };
 
   // Statistics calculation
   const totalStudents = students.length;
@@ -1014,31 +1091,225 @@ export const DirecteurDashboard = ({
         {/* SUBTAB 2: COURS & ENSEIGNANTS (7e, 8e EB & HUMANITÉS) */}
         {attributionSubTab === 'cours' && (
           <div className="space-y-4 animate-in fade-in duration-200">
-            {/* Class Pill selector */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              <span className="text-xs font-semibold text-slate-500 shrink-0">Classe :</span>
-              {classes.map((cls) => {
-                const isSelected = (selectedCourseClassId || classes[0]?.id) === cls.id;
-                return (
-                  <button
-                    key={cls.id}
-                    onClick={() => setSelectedCourseClassId(cls.id)}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold shrink-0 transition-all ${
-                      isSelected
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    {cls.name}
-                  </button>
-                );
-              })}
+            {/* Guide & Règles d'attribution des cours et des coefficients */}
+            <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-blue-950 space-y-2">
+              <div className="flex items-center gap-2 font-bold text-blue-900">
+                <HelpCircle className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>Attribution des cours par la Direction & Choix du coefficient par le Professeur</span>
+              </div>
+              <p className="text-[11px] text-blue-800 leading-relaxed">
+                <strong>1. Écriture du nom du cours :</strong> Le Directeur peut rédiger librement le nom d'un cours spécifique (ex : <em>Botanique</em>, <em>Dessin Technique</em>, <em>Informatique Pratique</em>) ou attribuer les matières du programme officiel EPST.
+                <br />
+                <strong>2. Liberté du coefficient par le professeur :</strong> Le coefficient défini ici sert de base indicative. Lors de chaque saisie de notes, <strong>l'enseignant choisit et modifie lui-même le coefficient</strong> directement sur son écran selon le barème de son évaluation.
+              </p>
             </div>
+
+            {/* Actions Bar: Class Selector + New Course Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* Class Pill selector */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+                <span className="text-xs font-semibold text-slate-500 shrink-0">Classe :</span>
+                {classes.map((cls) => {
+                  const isSelected = (selectedCourseClassId || classes[0]?.id) === cls.id;
+                  return (
+                    <button
+                      key={cls.id}
+                      onClick={() => {
+                        setSelectedCourseClassId(cls.id);
+                        setCourseClassIdInput(cls.id);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all ${
+                        isSelected
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {cls.name}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Button to toggle custom course writing form */}
+              <button
+                type="button"
+                onClick={() => setShowCourseCreationForm((prev) => !prev)}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors shadow-xs shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{showCourseCreationForm ? 'Masquer le formulaire' : 'Rédiger un cours personnalisé'}</span>
+              </button>
+            </div>
+
+            {/* FORMULAIRE : ÉCRIRE LE NOM DU COURS ET ATTRIBUER AU PROFESSEUR */}
+            {showCourseCreationForm && (
+              <form
+                onSubmit={handleCreateAndAssignCourse}
+                className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/30 space-y-3.5 animate-in fade-in"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Edit3 className="w-4 h-4 text-indigo-600" />
+                    <span className="font-bold text-slate-900 text-xs">
+                      Créer un nouveau cours & l'affecter à un professeur
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-500">
+                    Saisie par le Directeur
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {/* Nom du cours écrit par le directeur */}
+                  <div className="lg:col-span-2">
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Nom complet du cours rédigé par le Directeur *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Botanique & Écologie, Dessin & Métiers, Informatique Pratique..."
+                      value={courseNameInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCourseNameInput(val);
+                        if (!courseCodeInput) {
+                          setCourseCodeInput(val.slice(0, 4).toUpperCase().replace(/[^A-Z]/g, ''));
+                        }
+                      }}
+                      className="w-full text-xs px-3 py-2 rounded-lg bg-white border border-slate-300 font-semibold text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  {/* Code de référence */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Code officiel / Abrégé *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: BOT, DESS, INFO"
+                      value={courseCodeInput}
+                      onChange={(e) => setCourseCodeInput(e.target.value.toUpperCase())}
+                      className="w-full text-xs px-3 py-2 rounded-lg bg-white border border-slate-300 font-mono font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  {/* Catégorie */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Catégorie pédagogique
+                    </label>
+                    <select
+                      value={courseCategoryInput}
+                      onChange={(e) => setCourseCategoryInput(e.target.value as Subject['category'])}
+                      className="w-full text-xs px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                    >
+                      <option value="Sciences">Sciences & Technologies</option>
+                      <option value="Lettres & Langues">Lettres & Langues</option>
+                      <option value="Sciences Humaines">Sciences Humaines & Sociales</option>
+                      <option value="Technique">Technique & Professionnel</option>
+                      <option value="Autre">Autre / Éducation Civique</option>
+                    </select>
+                  </div>
+
+                  {/* Classe cible */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Classe concernée *
+                    </label>
+                    <select
+                      value={courseClassIdInput || selectedCourseClassId}
+                      onChange={(e) => setCourseClassIdInput(e.target.value)}
+                      className="w-full text-xs px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                    >
+                      {classes.map((cls) => (
+                        <option key={cls.id} value={cls.id}>
+                          {cls.name} ({cls.level})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Professeur assigné */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Professeur en charge du cours *
+                    </label>
+                    <select
+                      required
+                      value={courseTeacherIdInput}
+                      onChange={(e) => setCourseTeacherIdInput(e.target.value)}
+                      className="w-full text-xs px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                    >
+                      <option value="">-- Choisir le professeur --</option>
+                      {teachers.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.fullName} ({t.specialty})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Coefficient indicatif */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Coeff. indicatif (modifiable par le prof)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={courseCoeffInput}
+                      onChange={(e) => setCourseCoeffInput(Number(e.target.value))}
+                      className="w-full text-xs px-3 py-2 rounded-lg bg-white border border-slate-300 font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  {/* Barème indicatif */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Barème indicatif (points)
+                    </label>
+                    <select
+                      value={courseMaxScoreInput}
+                      onChange={(e) => setCourseMaxScoreInput(Number(e.target.value))}
+                      className="w-full text-xs px-3 py-2 rounded-lg bg-white border border-slate-300 font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    >
+                      <option value="20">Sur 20 points (Standard)</option>
+                      <option value="40">Sur 40 points</option>
+                      <option value="50">Sur 50 points</option>
+                      <option value="10">Sur 10 points</option>
+                    </select>
+                  </div>
+
+                  {/* Boutons d'action */}
+                  <div className="flex items-end gap-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmittingCourse}
+                      className="flex-1 py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-50"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>{isSubmittingCourse ? 'Enregistrement...' : 'Enregistrer & Attribuer'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCourseCreationForm(false)}
+                      className="py-2 px-3 rounded-lg border border-slate-300 bg-white text-slate-700 font-semibold text-xs hover:bg-slate-100 transition-colors"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
 
             {/* Courses List for the selected class */}
             {(() => {
               const activeClass = classes.find((c) => c.id === (selectedCourseClassId || classes[0]?.id)) || classes[0];
-              const displaySubjects = subjects.length > 0 ? subjects : [
+              const rawSubjects = subjects.length > 0 ? subjects : [
                 { id: 'sbj-math', schoolId: school.id, name: 'Mathématiques & Algèbre', code: 'MATH', category: 'Sciences', defaultCoefficient: 4, defaultMaxScore: 40 },
                 { id: 'sbj-fr', schoolId: school.id, name: 'Français & Littérature', code: 'FRAN', category: 'Lettres & Langues', defaultCoefficient: 4, defaultMaxScore: 40 },
                 { id: 'sbj-phys', schoolId: school.id, name: 'Sciences Physiques & Technologie', code: 'PHYS', category: 'Sciences', defaultCoefficient: 3, defaultMaxScore: 30 },
@@ -1048,30 +1319,62 @@ export const DirecteurDashboard = ({
                 { id: 'sbj-info', schoolId: school.id, name: 'Informatique & TIC', code: 'INFO', category: 'Sciences', defaultCoefficient: 2, defaultMaxScore: 20 },
               ];
 
+              const displaySubjects = courseFilterSearch.trim()
+                ? rawSubjects.filter(
+                    (s) =>
+                      s.name.toLowerCase().includes(courseFilterSearch.toLowerCase()) ||
+                      s.code.toLowerCase().includes(courseFilterSearch.toLowerCase())
+                  )
+                : rawSubjects;
+
               return (
-                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-                  <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between text-xs">
-                    <div className="font-semibold text-slate-800">
-                      Programme officiel pour <span className="text-blue-600 font-bold">{activeClass?.name}</span> ({activeClass?.level})
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs space-y-0">
+                  <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                    <div>
+                      <span className="font-semibold text-slate-800">
+                        Cours programmés pour <strong className="text-indigo-600 font-bold">{activeClass?.name}</strong> ({activeClass?.level})
+                      </span>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {displaySubjects.length} cours • Le coefficient peut être modulé par l'enseignant lors de ses saisies
+                      </p>
                     </div>
-                    <span className="text-slate-500 font-medium">Norme Loi-cadre EPST</span>
+
+                    {/* Quick filter */}
+                    <div className="relative w-full sm:w-56">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+                      <input
+                        type="text"
+                        placeholder="Filtrer un cours..."
+                        value={courseFilterSearch}
+                        onChange={(e) => setCourseFilterSearch(e.target.value)}
+                        className="w-full pl-8 pr-2.5 py-1 text-xs rounded-lg border border-slate-300 bg-white text-slate-900 outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
                   </div>
 
-                  <div className="divide-y divide-slate-100">
+                  <div className="divide-y divide-slate-100 bg-white">
                     {displaySubjects.map((sub) => {
                       const currentAssignedTeacherId = assignedCoursesMap[`${activeClass?.id}-${sub.id}`] || (teachers[0]?.id ?? '');
                       const assignedTeacher = teachers.find((t) => t.id === currentAssignedTeacherId);
 
                       return (
-                        <div key={sub.id} className="p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs hover:bg-slate-50/60 transition-colors">
-                          <div className="min-w-48">
-                            <div className="font-bold text-slate-900">{sub.name}</div>
-                            <div className="text-[11px] text-slate-400">
-                              Code: {sub.code} • Catégorie: {sub.category} • Coeff: {sub.defaultCoefficient}
+                        <div key={sub.id} className="p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs hover:bg-slate-50/70 transition-colors">
+                          <div className="min-w-56">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 text-sm">{sub.name}</span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700">
+                                {sub.code}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">
+                              Catégorie : {sub.category} • Coeff indicatif : <strong>{sub.defaultCoefficient}</strong> • Barème : /{sub.defaultMaxScore} pts
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 flex-1 max-w-sm">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-1 max-w-md">
+                            <label className="text-[11px] text-slate-500 font-medium sm:hidden">
+                              Professeur attribué :
+                            </label>
                             <select
                               value={currentAssignedTeacherId}
                               onChange={(e) => {
@@ -1086,12 +1389,12 @@ export const DirecteurDashboard = ({
                                 const tch = teachers.find((t) => t.id === tId);
                                 setTitulaireSuccessMsg(
                                   tch
-                                    ? `✓ ${tch.fullName} affecté au cours de ${sub.name} (${activeClass?.name}).`
+                                    ? `✓ ${tch.fullName} affecté au cours de ${sub.name} (${activeClass?.name}). L'enseignant choisit son coefficient à la saisie.`
                                     : 'Affectation mise à jour.'
                                 );
                                 setTimeout(() => setTitulaireSuccessMsg(null), 3500);
                               }}
-                              className="w-full text-xs px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-800 font-medium focus:ring-1 focus:ring-blue-500 outline-none"
+                              className="w-full text-xs px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-800 font-medium focus:ring-1 focus:ring-indigo-500 outline-none"
                             >
                               <option value="">-- Assigner un professeur --</option>
                               {teachers.map((t) => (
@@ -1100,18 +1403,18 @@ export const DirecteurDashboard = ({
                                 </option>
                               ))}
                             </select>
-                          </div>
 
-                          <div className="flex items-center gap-1.5">
-                            {assignedTeacher ? (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                Affecté : {assignedTeacher.fullName.split(' ')[0]}
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                                À pourvoir
-                              </span>
-                            )}
+                            <div className="shrink-0">
+                              {assignedTeacher ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  Affecté : {assignedTeacher.fullName.split(' ')[0]}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                  À pourvoir
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
