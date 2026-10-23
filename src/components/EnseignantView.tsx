@@ -1223,9 +1223,19 @@ export const EnseignantView = ({
                                 ({stu.gender === 'F' ? 'Fille' : 'Garçon'})
                               </span>
                             </div>
-                            <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
-                              {stu.matricule}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                                {stu.matricule}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => openIncidentModal(stu)}
+                                className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                                title="Signaler un incident"
+                              >
+                                <ShieldAlert className="w-3.5 h-3.5 text-red-500" />
+                              </button>
+                            </div>
                           </div>
 
                           {/* 3 boutons prenant 100% de la largeur */}
@@ -1270,7 +1280,31 @@ export const EnseignantView = ({
 
                           {/* Motif si absent ou retard */}
                           {(currentStatus === 'absent' || currentStatus === 'retard') && (
-                            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                              <div className="flex flex-wrap gap-1">
+                                {['Malade', 'Transport', 'Autorisé', 'Non justifié'].map((tag) => (
+                                  <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={() => {
+                                      setAttendanceDraft((prev) => ({
+                                        ...prev,
+                                        [stu.id]: {
+                                          status: prev[stu.id]?.status || currentStatus,
+                                          justification: tag,
+                                        },
+                                      }));
+                                    }}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                                      currentJustif === tag
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                                    }`}
+                                  >
+                                    {tag}
+                                  </button>
+                                ))}
+                              </div>
                               <input
                                 id={`input-att-justif-${stu.id}`}
                                 type="text"
@@ -1281,7 +1315,7 @@ export const EnseignantView = ({
                                   setAttendanceDraft((prev) => ({
                                     ...prev,
                                     [stu.id]: {
-                                      status: prev[stu.id]?.status || 'present',
+                                      status: prev[stu.id]?.status || currentStatus,
                                       justification: val,
                                     },
                                   }));
@@ -1572,73 +1606,65 @@ export const EnseignantView = ({
       {/* Bouton: ENREGISTRER                                       */}
       {/* Message: "Présences enregistrées avec succès."            */}
       {/* ========================================================= */}
+      {/* ========================================================= */}
+      {/* VUE APPEL JOURNALIER (MENU SIDEBAR) : PLEINE LARGEUR,     */}
+      {/* ZÉRO TABLE ÉTRIQUÉE, ZÉRO SCROLL HORIZONTAL, CARTES 100%  */}
+      {/* ========================================================= */}
       {activeTab === 'attendance' && (
-        <div className="space-y-6 text-xs">
-          {/* Sélection Classe, Matière, Date dynamique */}
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
-            <h2 className="text-base font-bold text-slate-900 mb-1">
-              Registre d'Appel des Présences
-            </h2>
-            <p className="text-slate-500 text-xs mb-4">
-              Pointage instantané des élèves. La date provient dynamiquement du système et n'est pas codée en dur.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Sélection: Classe */}
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">1. Sélection Classe *</label>
-                <select
-                  id="select-attendance-class"
-                  value={selectedClassId}
-                  onChange={(e) => setSelectedClassId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-medium focus:ring-2 focus:ring-indigo-500"
-                >
-                  {activeClassList.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({students.filter((s) => s.classId === c.id).length} élèves)
-                    </option>
-                  ))}
-                </select>
+        <div className="w-full space-y-3">
+          {/* En-tête de sélection : Classe + Date + Heure + Actions rapides */}
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+            {/* 1. Sélecteur de classe interactif pleine largeur */}
+            <div>
+              <label htmlFor="select-attendance-class" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+                Sélectionnez la classe pour l'appel :
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {activeClassList.map((c) => {
+                  const isCur = (selectedClass?.id || selectedClassId) === c.id;
+                  const stuCount = students.filter((s) => s.classId === c.id).length;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setSelectedClassId(c.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        isCur
+                          ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {c.name} ({stuCount} élèves)
+                    </button>
+                  );
+                })}
               </div>
+            </div>
 
-              {/* Sélection: Matière éventuellement */}
+            {/* 2. Date, Créneau et Boutons globaux */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
               <div>
-                <label className="block text-slate-700 font-bold mb-1">2. Matière (éventuellement)</label>
-                <select
-                  id="select-attendance-subject"
-                  value={selectedSubjectId}
-                  onChange={(e) => setSelectedSubjectId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-medium focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">-- Appel Général de la Journée --</option>
-                  {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Sélection: Date dynamique (PROVENANT DU SYSTÈME) */}
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">3. Date dynamique *</label>
+                <label htmlFor="input-attendance-date-main" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Date du jour
+                </label>
                 <input
-                  id="input-attendance-date"
+                  id="input-attendance-date-main"
                   type="date"
                   value={attendanceDate}
                   onChange={(e) => setAttendanceDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-medium focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
                 />
               </div>
 
-              {/* Créneau de la séance */}
               <div>
-                <label className="block text-slate-700 font-bold mb-1">4. Créneau Horaire</label>
+                <label htmlFor="select-attendance-slot-main" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Créneau horaire
+                </label>
                 <select
-                  id="select-attendance-timeslot"
+                  id="select-attendance-slot-main"
                   value={attendanceTimeSlot}
                   onChange={(e) => setAttendanceTimeSlot(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-medium focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
                 >
                   <option value="07h30 - 08h25 (1ère Heure)">07h30 - 08h25 (1ère Heure)</option>
                   <option value="08h25 - 09h20 (2ème Heure)">08h25 - 09h20 (2ème Heure)</option>
@@ -1648,217 +1674,177 @@ export const EnseignantView = ({
                   <option value="Appel Général Journée">Appel Général Journée</option>
                 </select>
               </div>
-            </div>
 
-            {/* Quick action bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-4 border-t border-slate-100">
-              <div className="flex items-center gap-2">
+              <div className="flex items-end gap-2">
                 <button
-                  id="btn-mark-all-present"
+                  type="button"
+                  id="btn-attendance-mark-all-present"
                   onClick={() => handleSetAllAttendance('present')}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors flex items-center gap-1.5 shadow-xs"
+                  className="flex-1 py-2 px-2.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1 shadow-xs"
                 >
                   <UserCheck className="w-3.5 h-3.5" />
-                  <span>Tout marquer Présent</span>
+                  <span>Tous Présents</span>
                 </button>
                 <button
-                  id="btn-mark-all-absent"
+                  type="button"
+                  id="btn-attendance-mark-all-absent"
                   onClick={() => handleSetAllAttendance('absent')}
-                  className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 font-semibold transition-colors"
+                  className="flex-1 py-2 px-2.5 rounded-md border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40 dark:hover:text-red-300 text-slate-700 dark:text-slate-300 font-semibold text-xs transition-colors"
                 >
-                  Tout marquer Absent
+                  Tous Absents
                 </button>
               </div>
+            </div>
 
-              {/* Attendance counters */}
-              <div className="flex items-center gap-3 text-xs font-semibold">
-                <span className="text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                  Présents : <strong>{countPresent}</strong>
-                </span>
-                <span className="text-red-700 bg-red-50 px-2.5 py-1 rounded-lg border border-red-200">
-                  Absents : <strong>{countAbsent}</strong>
-                </span>
-                <span className="text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
-                  Retards : <strong>{countRetard}</strong>
-                </span>
-                <span className="text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
-                  Excusés : <strong>{countExcuse}</strong>
-                </span>
-              </div>
+            {/* Résumé assiduité */}
+            <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs font-medium text-slate-600 dark:text-slate-400">
+              <span>Classe : <strong className="text-slate-900 dark:text-white">{selectedClass?.name || 'Sélectionnée'}</strong></span>
+              <span>•</span>
+              <span>Présents : <strong className="text-emerald-600 dark:text-emerald-400">{countPresent}</strong></span>
+              <span>•</span>
+              <span>Retards : <strong className="text-amber-600 dark:text-amber-400">{countRetard}</strong></span>
+              <span>•</span>
+              <span>Absents : <strong className="text-red-600 dark:text-red-400">{countAbsent}</strong></span>
             </div>
           </div>
 
-          {/* Liste : Élève | Présent | Absent | Retard (+ Excusé) */}
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  Feuille de Présence : {selectedClass?.name || 'Classe'}
-                </h3>
-                <p className="text-slate-500 text-xs">
-                  Date : <span className="font-semibold text-slate-800">{attendanceDate}</span> • Créneau : {attendanceTimeSlot}
-                </p>
-              </div>
+          {/* Cartes élèves pleine largeur, 100% réactives, zéro scroll horizontal */}
+          <div className="space-y-2">
+            {classStudents.map((stu) => {
+              const currentStatus = attendanceDraft[stu.id]?.status || 'present';
+              const currentJustif = attendanceDraft[stu.id]?.justification || '';
 
-              {/* BOUTON ENREGISTRER OBLIGATOIRE DU CAHIER DES CHARGES */}
-              <button
-                id="btn-save-attendance-main"
-                onClick={handleSaveAttendance}
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-sm flex items-center gap-2 transition-transform active:scale-95"
-              >
-                <Save className="w-4 h-4" />
-                <span>ENREGISTRER</span>
-              </button>
-            </div>
+              return (
+                <div
+                  key={stu.id}
+                  className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-slate-900 dark:text-white">
+                        {stu.lastName} {stu.postName} {stu.firstName}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        ({stu.gender === 'F' ? 'Fille' : 'Garçon'})
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                        {stu.matricule}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => openIncidentModal(stu)}
+                        className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                        title="Signaler un incident"
+                      >
+                        <ShieldAlert className="w-3.5 h-3.5 text-red-500" />
+                      </button>
+                    </div>
+                  </div>
 
-            <div className="overflow-x-auto border border-slate-200 rounded-xl">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-700 font-bold">
-                    <th className="py-3 px-3">Matricule</th>
-                    <th className="py-3 px-3">Élève</th>
-                    <th className="py-3 px-3 text-center">Statut Actuel</th>
-                    <th className="py-3 px-3 text-center">Pointer la Présence</th>
-                    <th className="py-3 px-3">Motif / Justification</th>
-                    <th className="py-3 px-3 text-center">Discipline</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {classStudents.map((stu) => {
-                    const currentStatus = attendanceDraft[stu.id]?.status || 'present';
-                    const currentJustif = attendanceDraft[stu.id]?.justification || '';
+                  {/* 3 boutons prenant 100% de la largeur */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      id={`btn-att-p-main-${stu.id}`}
+                      onClick={() => handleSetStudentAttendanceStatus(stu.id, 'present')}
+                      className={`py-2 rounded-md font-bold text-xs transition-colors flex items-center justify-center gap-1 ${
+                        currentStatus === 'present'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                      }`}
+                    >
+                      ✓ Présent
+                    </button>
+                    <button
+                      type="button"
+                      id={`btn-att-r-main-${stu.id}`}
+                      onClick={() => handleSetStudentAttendanceStatus(stu.id, 'retard')}
+                      className={`py-2 rounded-md font-bold text-xs transition-colors flex items-center justify-center gap-1 ${
+                        currentStatus === 'retard'
+                          ? 'bg-amber-500 text-white shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                      }`}
+                    >
+                      ⏱ Retard
+                    </button>
+                    <button
+                      type="button"
+                      id={`btn-att-a-main-${stu.id}`}
+                      onClick={() => handleSetStudentAttendanceStatus(stu.id, 'absent')}
+                      className={`py-2 rounded-md font-bold text-xs transition-colors flex items-center justify-center gap-1 ${
+                        currentStatus === 'absent'
+                          ? 'bg-red-600 text-white shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-red-50 dark:hover:bg-red-950/40'
+                      }`}
+                    >
+                      ✗ Absent
+                    </button>
+                  </div>
 
-                    return (
-                      <tr key={stu.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3 px-3 font-mono text-slate-600 font-semibold">{stu.matricule}</td>
-                        <td className="py-3 px-3">
-                          <div className="font-bold text-slate-900">
-                            {stu.lastName} {stu.postName} {stu.firstName}
-                          </div>
-                          <div className="text-[10px] text-slate-400">
-                            {stu.gender === 'F' ? 'Fille' : 'Garçon'}
-                          </div>
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                              currentStatus === 'present'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : currentStatus === 'absent'
-                                ? 'bg-red-100 text-red-800'
-                                : currentStatus === 'retard'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-blue-100 text-blue-800'
-                            }`}
-                          >
-                            {currentStatus === 'present'
-                              ? '✓ Présent'
-                              : currentStatus === 'absent'
-                              ? '✗ Absent'
-                              : currentStatus === 'retard'
-                              ? '⏱ Retard'
-                              : '📄 Excusé'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3">
-                          {/* 4 Boutons clairs : Présent | Absent | Retard | Excusé */}
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              id={`btn-att-p-${stu.id}`}
-                              onClick={() => handleSetStudentAttendanceStatus(stu.id, 'present')}
-                              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
-                                currentStatus === 'present'
-                                ? 'bg-emerald-600 text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-700 hover:bg-emerald-50'
-                              }`}
-                            >
-                              Présent
-                            </button>
-                            <button
-                              id={`btn-att-a-${stu.id}`}
-                              onClick={() => handleSetStudentAttendanceStatus(stu.id, 'absent')}
-                              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
-                                currentStatus === 'absent'
-                                ? 'bg-red-600 text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-700 hover:bg-red-50'
-                              }`}
-                            >
-                              Absent
-                            </button>
-                            <button
-                              id={`btn-att-r-${stu.id}`}
-                              onClick={() => handleSetStudentAttendanceStatus(stu.id, 'retard')}
-                              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
-                                currentStatus === 'retard'
-                                ? 'bg-amber-500 text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-700 hover:bg-amber-50'
-                              }`}
-                            >
-                              Retard
-                            </button>
-                            <button
-                              id={`btn-att-e-${stu.id}`}
-                              onClick={() => handleSetStudentAttendanceStatus(stu.id, 'excuse')}
-                              className={`px-2.5 py-1.5 rounded-lg font-semibold text-xs transition-all ${
-                                currentStatus === 'excuse'
-                                ? 'bg-blue-600 text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-600 hover:bg-blue-50'
-                              }`}
-                            >
-                              Excusé
-                            </button>
-                          </div>
-                        </td>
-                        <td className="py-3 px-3">
-                          <input
-                            id={`input-att-justif-${stu.id}`}
-                            type="text"
-                            placeholder="Motif / Commentaire..."
-                            value={currentJustif}
-                            onChange={(e) => {
-                              const val = e.target.value;
+                  {/* Justification si absent ou retard */}
+                  {(currentStatus === 'absent' || currentStatus === 'retard') && (
+                    <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                      <div className="flex flex-wrap gap-1">
+                        {['Malade', 'Transport', 'Autorisé', 'Non justifié'].map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => {
                               setAttendanceDraft((prev) => ({
                                 ...prev,
                                 [stu.id]: {
-                                  status: prev[stu.id]?.status || 'present',
-                                  justification: val,
+                                  status: prev[stu.id]?.status || currentStatus,
+                                  justification: tag,
                                 },
                               }));
                             }}
-                            className="w-full px-2.5 py-1 rounded-lg border border-slate-200 text-xs focus:ring-1 focus:ring-indigo-500"
-                          />
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          <button
-                            id={`btn-att-incident-${stu.id}`}
-                            onClick={() => openIncidentModal(stu)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                            title="Signaler un incident disciplinaire (Article 14)"
+                            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                              currentJustif === tag
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                            }`}
                           >
-                            <ShieldAlert className="w-4 h-4 text-red-500" />
+                            {tag}
                           </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        ))}
+                      </div>
+                      <input
+                        id={`input-att-justif-main-${stu.id}`}
+                        type="text"
+                        placeholder="Préciser le motif ou commentaire..."
+                        value={currentJustif}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAttendanceDraft((prev) => ({
+                            ...prev,
+                            [stu.id]: {
+                              status: prev[stu.id]?.status || currentStatus,
+                              justification: val,
+                            },
+                          }));
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-slate-100 outline-none"
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
-            {/* Bottom Save bar */}
-            <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <span className="text-xs text-slate-500">
-                La sauvegarde déclenche l'actualisation du registre officiel et prépare les alertes SMS disciplinaires.
-              </span>
-              <button
-                id="btn-save-attendance-bottom"
-                onClick={handleSaveAttendance}
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-sm flex items-center gap-2 transition-transform active:scale-95"
-              >
-                <Save className="w-4 h-4" />
-                <span>ENREGISTRER</span>
-              </button>
-            </div>
+          {/* Bouton d'enregistrement pleine largeur en bas */}
+          <div className="pt-2 sticky bottom-16 sm:bottom-0 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-sm pb-4">
+            <button
+              type="button"
+              id="btn-save-attendance-full"
+              onClick={handleSaveAttendance}
+              className="w-full py-3 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-sm shadow-md hover:opacity-95 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              <span>ENREGISTRER L'APPEL ({classStudents.length} ÉLÈVES)</span>
+            </button>
           </div>
         </div>
       )}

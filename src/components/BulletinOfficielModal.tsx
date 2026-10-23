@@ -29,7 +29,7 @@ export const BulletinOfficielModal = ({ bulletin, onClose }: BulletinOfficielMod
             <div>
               <h2 className="font-bold text-sm tracking-tight">Bulletin Scolaire Officiel — RDC (EPST)</h2>
               <p className="text-xs text-slate-300">
-                {bulletin.student.firstName} {bulletin.student.lastName} {bulletin.student.postName} • {bulletin.schoolClass.name}
+                {bulletin.student?.firstName} {bulletin.student?.lastName} {bulletin.student?.postName} • {bulletin.schoolClass?.name || 'Classe'}
               </p>
             </div>
           </div>
@@ -73,19 +73,19 @@ export const BulletinOfficielModal = ({ bulletin, onClose }: BulletinOfficielMod
               Ministère de l'Enseignement Primaire, Secondaire et Technique (EPST)
             </div>
             <div className="text-[11px] font-medium text-slate-500 mt-0.5">
-              Province Éducationnelle de {bulletin.school.province} • Ville de {bulletin.school.city}
+              Province Éducationnelle de {bulletin.school?.province || 'Kinshasa'} • Ville de {bulletin.school?.city || 'Kinshasa'}
             </div>
 
             <div className="mt-3 inline-block px-6 py-2 rounded-xl bg-slate-100 border border-slate-300">
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 uppercase">
-                {bulletin.school.name}
+                {bulletin.school?.name || 'Établissement Scolaire RDC'}
               </h1>
-              <p className="text-xs text-slate-600 mt-0.5">{bulletin.school.address} • Tél: {bulletin.school.phone}</p>
+              <p className="text-xs text-slate-600 mt-0.5">{bulletin.school?.address || 'Kinshasa'} • Tél: {bulletin.school?.phone || '+243 81 000 0000'}</p>
             </div>
 
             <div className="mt-4">
               <span className="inline-block px-4 py-1 rounded-full bg-blue-900 text-white font-bold text-xs uppercase tracking-wider">
-                Bulletin de Notes — Année Scolaire {bulletin.academicYear.name}
+                Bulletin de Notes — Année Scolaire {bulletin.academicYear?.name || '2025 - 2026'}
               </span>
             </div>
           </div>
@@ -95,21 +95,21 @@ export const BulletinOfficielModal = ({ bulletin, onClose }: BulletinOfficielMod
             <div>
               <span className="text-slate-500 block">Nom, Post-nom & Prénom :</span>
               <strong className="text-slate-900 font-bold text-sm block">
-                {bulletin.student.lastName} {bulletin.student.postName} {bulletin.student.firstName}
+                {bulletin.student?.lastName} {bulletin.student?.postName} {bulletin.student?.firstName}
               </strong>
             </div>
             <div>
               <span className="text-slate-500 block">Matricule :</span>
-              <strong className="text-slate-900 font-bold block">{bulletin.student.matricule}</strong>
+              <strong className="text-slate-900 font-bold block">{bulletin.student?.matricule || 'N/A'}</strong>
             </div>
             <div>
               <span className="text-slate-500 block">Classe & Section :</span>
-              <strong className="text-slate-900 font-bold block">{bulletin.schoolClass.name}</strong>
-              <span className="text-slate-600 text-[10px]">{bulletin.schoolClass.section}</span>
+              <strong className="text-slate-900 font-bold block">{bulletin.schoolClass?.name || 'Classe'}</strong>
+              <span className="text-slate-600 text-[10px]">{bulletin.schoolClass?.section || 'Section Générale'}</span>
             </div>
             <div>
               <span className="text-slate-500 block">Période d'Évaluation :</span>
-              <strong className="text-blue-700 font-bold block">{bulletin.period.name}</strong>
+              <strong className="text-blue-700 font-bold block">{bulletin.period?.name || 'Période en cours'}</strong>
             </div>
           </div>
 
@@ -129,26 +129,26 @@ export const BulletinOfficielModal = ({ bulletin, onClose }: BulletinOfficielMod
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 font-mono">
-                {bulletin.subjectsResults.map((sub, idx) => {
+                {(bulletin.subjectsResults || []).map((sub, idx) => {
                   const isFail = (sub.percentage || 0) < 50;
                   return (
                     <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                       <td className="py-2 px-3 font-sans font-medium text-slate-900 border border-slate-300">
                         {sub.subjectName}
-                        <span className="text-[10px] text-slate-500 block font-normal">{sub.category} (Coeff {sub.coefficient})</span>
+                        <span className="text-[10px] text-slate-500 block font-normal">{sub.category} (Coeff {sub.coefficient || 1})</span>
                       </td>
-                      <td className="py-2 px-2 text-center text-slate-600 border border-slate-300">{sub.maxPeriod}</td>
-                      <td className="py-2 px-2 text-center font-bold text-slate-800 border border-slate-300">{sub.period1Score}</td>
-                      <td className="py-2 px-2 text-center font-bold text-slate-800 border border-slate-300">{sub.period2Score}</td>
-                      <td className="py-2 px-2 text-center font-bold text-blue-900 border border-slate-300">{sub.examScore}</td>
+                      <td className="py-2 px-2 text-center text-slate-600 border border-slate-300">{sub.maxPeriod ?? 20}</td>
+                      <td className="py-2 px-2 text-center font-bold text-slate-800 border border-slate-300">{sub.period1Score ?? '-'}</td>
+                      <td className="py-2 px-2 text-center font-bold text-slate-800 border border-slate-300">{sub.period2Score ?? '-'}</td>
+                      <td className="py-2 px-2 text-center font-bold text-blue-900 border border-slate-300">{sub.examScore ?? '-'}</td>
                       <td className="py-2 px-2 text-center font-extrabold text-slate-900 border border-slate-300">
-                        {sub.totalSemesterScore} / {sub.maxSemesterTotal}
+                        {sub.totalSemesterScore ?? '-'} / {sub.maxSemesterTotal ?? '-'}
                       </td>
                       <td className={`py-2 px-2 text-center font-bold border border-slate-300 ${isFail ? 'text-red-600 bg-red-50' : 'text-emerald-700'}`}>
-                        {sub.percentage}%
+                        {sub.percentage ?? 0}%
                       </td>
                       <td className="py-2 px-3 font-sans text-[11px] text-slate-700 border border-slate-300">
-                        {sub.appreciation}
+                        {sub.appreciation || 'Bien'}
                       </td>
                     </tr>
                   );
@@ -163,12 +163,12 @@ export const BulletinOfficielModal = ({ bulletin, onClose }: BulletinOfficielMod
             <div className="space-y-1">
               <span className="text-[11px] font-semibold text-slate-500 uppercase">Résultats Généraux</span>
               <div className="text-sm font-bold text-slate-800">
-                Points : <span className="text-base font-black">{bulletin.totalScoreObtained}</span> / {bulletin.totalMaxPossible}
+                Points : <span className="text-base font-black">{bulletin.totalScoreObtained ?? 0}</span> / {bulletin.totalMaxPossible ?? 0}
               </div>
               <div className="text-xl font-black text-blue-900 flex items-center gap-2">
-                <span>{bulletin.generalPercentage}%</span>
+                <span>{bulletin.generalPercentage ?? 0}%</span>
                 <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold">
-                  Place : {bulletin.classRank}e sur {bulletin.totalStudentsInClass}
+                  Place : {bulletin.classRank || 1}e sur {bulletin.totalStudentsInClass || 1}
                 </span>
               </div>
             </div>
@@ -177,13 +177,13 @@ export const BulletinOfficielModal = ({ bulletin, onClose }: BulletinOfficielMod
             <div className="space-y-1 border-t sm:border-t-0 sm:border-l border-slate-300 sm:pl-4">
               <span className="text-[11px] font-semibold text-slate-500 uppercase">Assiduité & Conduite</span>
               <div className="text-xs text-slate-700">
-                Conduite : <strong className="font-bold text-slate-900">{bulletin.conduct}</strong>
+                Conduite : <strong className="font-bold text-slate-900">{bulletin.conduct || 'Très Bonne'}</strong>
               </div>
               <div className="text-xs text-slate-700">
-                Application : <strong className="font-bold text-slate-900">{bulletin.application}</strong>
+                Application : <strong className="font-bold text-slate-900">{bulletin.application || 'Très Bon'}</strong>
               </div>
               <div className="text-[11px] text-slate-500">
-                Absences : <strong className="text-slate-900">{bulletin.daysAbsent} jour(s)</strong> • Retards : {bulletin.daysLate}
+                Absences : <strong className="text-slate-900">{bulletin.daysAbsent || 0} jour(s)</strong> • Retards : {bulletin.daysLate || 0}
               </div>
             </div>
 
@@ -192,7 +192,7 @@ export const BulletinOfficielModal = ({ bulletin, onClose }: BulletinOfficielMod
               <span className="text-[11px] font-semibold text-slate-500 uppercase">Décision du Jury</span>
               <div className="p-2 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-900 font-black text-xs text-center flex items-center justify-center gap-1.5">
                 <CheckCircle className="w-4 h-4 text-emerald-700" />
-                <span>{bulletin.juryDecision}</span>
+                <span>{bulletin.juryDecision || 'Admis'}</span>
               </div>
             </div>
           </div>

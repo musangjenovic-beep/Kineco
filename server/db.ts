@@ -1552,7 +1552,7 @@ class DatabaseManager {
   }
 
   updateClass(schoolId: string, classId: string, updates: Partial<SchoolClass>, updatedBy = 'Direction'): SchoolClass | undefined {
-    const cls = this.classes.find((c) => c.id === classId && (c.schoolId === schoolId || !schoolId));
+    const cls = this.classes.find((c) => c.id === classId);
     if (!cls) return undefined;
 
     const previousTitulaire = cls.mainTeacherId;
@@ -1560,6 +1560,9 @@ class DatabaseManager {
 
     if (updates.mainTeacherId !== undefined && updates.mainTeacherId !== previousTitulaire) {
       const teacher = this.teachers.find((t) => t.id === updates.mainTeacherId);
+      if (teacher && !teacher.assignedClasses.includes(cls.id)) {
+        teacher.assignedClasses.push(cls.id);
+      }
       const teacherName = teacher ? teacher.fullName : 'Non attribué';
       this.logAction(
         schoolId,
@@ -1595,6 +1598,43 @@ class DatabaseManager {
     this.subjects.push(newSub);
     this.logAction(schoolId, 'Admin Scolaire', 'admin_scolaire', 'CREATION_MATIERE', `Ajout de la matière ${newSub.name}`);
     return newSub;
+  }
+
+  // Class Subjects (Attribution des cours aux classes - 7e, 8e EB, etc.)
+  getClassSubjects(schoolId?: string, classId?: string): ClassSubject[] {
+    return this.classSubjects.filter((cs) => {
+      if (schoolId && cs.schoolId !== schoolId && cs.schoolId !== 'sch-bobokoli') return false;
+      if (classId && cs.classId !== classId) return false;
+      return true;
+    });
+  }
+
+  assignClassSubject(data: Omit<ClassSubject, 'id'>): ClassSubject {
+    const existingIndex = this.classSubjects.findIndex(
+      (cs) => cs.classId === data.classId && cs.subjectId === data.subjectId
+    );
+    if (existingIndex >= 0) {
+      this.classSubjects[existingIndex] = {
+        ...this.classSubjects[existingIndex],
+        ...data,
+      };
+      return this.classSubjects[existingIndex];
+    }
+    const newCs: ClassSubject = {
+      ...data,
+      id: `cs-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    };
+    this.classSubjects.push(newCs);
+    return newCs;
+  }
+
+  deleteClassSubject(id: string): boolean {
+    const index = this.classSubjects.findIndex((cs) => cs.id === id);
+    if (index >= 0) {
+      this.classSubjects.splice(index, 1);
+      return true;
+    }
+    return false;
   }
 
   // Students
@@ -1909,19 +1949,19 @@ class DatabaseManager {
 
   // Official RDC Bulletin Generator
   getStudentBulletin(schoolId: string, studentId: string, periodId?: string): BulletinData | null {
-    const school = this.schools.find((s) => s.id === schoolId);
     const student = this.students.find((s) => s.id === studentId);
-    if (!school || !student) return null;
+    if (!student) return null;
 
-    const schoolClass = this.classes.find((c) => c.id === student.classId);
-    const academicYear = this.academicYears.find((ay) => ay.schoolId === schoolId && ay.isCurrent) || this.academicYears[0];
-    const periods = this.academicPeriods.filter((p) => p.schoolId === schoolId);
-    const targetPeriod = periods.find((p) => (periodId ? p.id === periodId : p.isCurrent)) || periods[0];
+    const school = this.schools.find((s) => s.id === schoolId) || this.schools[0];
+    const schoolClass = this.classes.find((c) => c.id === student.classId) || this.classes[0];
+    const academicYear = this.academicYears.find((ay) => ay.isCurrent) || this.academicYears[0];
+    const periods = this.academicPeriods.filter((p) => p.schoolId === schoolId || !p.schoolId);
+    const targetPeriod = periods.find((p) => (periodId ? p.id === periodId : p.isCurrent)) || periods[0] || this.academicPeriods[0];
 
-    if (!schoolClass || !academicYear || !targetPeriod) return null;
+    if (!school || !schoolClass || !academicYear || !targetPeriod) return null;
 
     const classStudents = this.students.filter((s) => s.classId === schoolClass.id);
-    const schoolSubjects = this.subjects.filter((s) => s.schoolId === schoolId);
+    const schoolSubjects = this.subjects.length > 0 ? this.subjects : [];
 
     // Fetch all grades for this student
     const studentGrades = this.grades.filter((g) => g.studentId === student.id);

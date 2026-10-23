@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import { School, SchoolClass, Subject, Student, Grade, AcademicPeriod } from '../types';
-import { BookOpen, Award, CheckCircle2, AlertCircle, FileText, Check, ShieldCheck } from 'lucide-react';
+import { School, SchoolClass, Subject, Student, Grade, AcademicPeriod, Teacher } from '../types';
+import { BookOpen, Award, CheckCircle2, AlertCircle, FileText, Check, ShieldCheck, UserCheck } from 'lucide-react';
 
 interface DirecteurEtudesViewProps {
   school: School;
   classes: SchoolClass[];
   subjects: Subject[];
   students: Student[];
+  teachers?: Teacher[];
   grades: Grade[];
   academicPeriods: AcademicPeriod[];
   onOpenBulletin: (studentId: string) => void;
+  onAssignCourse?: (classId: string, subjectId: string, teacherId: string) => Promise<void>;
 }
 
 export const DirecteurEtudesView = ({
@@ -17,12 +19,17 @@ export const DirecteurEtudesView = ({
   classes,
   subjects,
   students,
+  teachers = [],
   grades,
   academicPeriods,
   onOpenBulletin,
+  onAssignCourse,
 }: DirecteurEtudesViewProps) => {
+  const [activeSubTab, setActiveSubTab] = useState<'deliberation' | 'cours'>('deliberation');
   const [selectedClassId, setSelectedClassId] = useState<string>(classes[0]?.id || '');
   const [validatedNotice, setValidatedNotice] = useState(false);
+  const [assignedCourseTeacher, setAssignedCourseTeacher] = useState<Record<string, string>>({});
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const selectedClass = classes.find((c) => c.id === selectedClassId) || classes[0];
   const classStudents = students.filter((s) => s.classId === selectedClass?.id);
@@ -35,6 +42,16 @@ export const DirecteurEtudesView = ({
     setValidatedNotice(true);
     setTimeout(() => setValidatedNotice(false), 3500);
   };
+
+  const defaultSubjectsList = subjects.length > 0 ? subjects : [
+    { id: 'sbj-math', schoolId: school.id, name: 'Mathématiques & Algèbre', code: 'MATH', category: 'Sciences', defaultCoefficient: 4, defaultMaxScore: 40 },
+    { id: 'sbj-fr', schoolId: school.id, name: 'Français & Littérature', code: 'FRAN', category: 'Lettres & Langues', defaultCoefficient: 4, defaultMaxScore: 40 },
+    { id: 'sbj-phys', schoolId: school.id, name: 'Sciences Physiques & Technologie', code: 'PHYS', category: 'Sciences', defaultCoefficient: 3, defaultMaxScore: 30 },
+    { id: 'sbj-svt', schoolId: school.id, name: 'Sciences de la Vie et de la Terre (SVT)', code: 'SVT', category: 'Sciences', defaultCoefficient: 2, defaultMaxScore: 20 },
+    { id: 'sbj-ang', schoolId: school.id, name: 'Anglais & Expression', code: 'ANG', category: 'Lettres & Langues', defaultCoefficient: 2, defaultMaxScore: 20 },
+    { id: 'sbj-hist', schoolId: school.id, name: 'Histoire & Éducation Civique', code: 'HIST', category: 'Sciences Humaines', defaultCoefficient: 2, defaultMaxScore: 20 },
+    { id: 'sbj-info', schoolId: school.id, name: 'Informatique & TIC', code: 'INFO', category: 'Sciences', defaultCoefficient: 2, defaultMaxScore: 20 },
+  ];
 
   return (
     <div className="space-y-6">
@@ -101,7 +118,39 @@ export const DirecteurEtudesView = ({
         </div>
       </div>
 
-      {/* Class Selector & Student Performance Grid */}
+      {/* Subtabs Selector */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+        <button
+          onClick={() => setActiveSubTab('deliberation')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeSubTab === 'deliberation'
+              ? 'bg-teal-600 text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          Palmarès & Validation des Bulletins
+        </button>
+        <button
+          onClick={() => setActiveSubTab('cours')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeSubTab === 'cours'
+              ? 'bg-teal-600 text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          Attribution des Cours (7e, 8e EB & Humanités)
+        </button>
+      </div>
+
+      {successMsg && (
+        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+          <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{successMsg}</span>
+        </div>
+      )}
+
+      {/* VIEW 1: DELIBERATION & PALMARES */}
+      {activeSubTab === 'deliberation' && (
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -193,6 +242,102 @@ export const DirecteurEtudesView = ({
           <ShieldCheck className="w-4 h-4 text-slate-400 shrink-0 ml-2" />
         </div>
       </div>
+      )}
+
+      {/* VIEW 2: ATTRIBUTION DES COURS (7e, 8e EB & HUMANITÉS) */}
+      {activeSubTab === 'cours' && (
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4 animate-in fade-in duration-200">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                Affectation Pédagogique des Cours & Professeurs
+              </h2>
+              <p className="text-xs text-slate-500">
+                Définition de la grille horaire et attribution des enseignants par matière pour le cycle d’Éducation de Base et les Humanités.
+              </p>
+            </div>
+
+            {/* Class Switcher */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-slate-600">Classe cible :</label>
+              <select
+                value={selectedClassId}
+                onChange={(e) => setSelectedClassId(e.target.value)}
+                className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-medium"
+              >
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.level})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Table of courses */}
+          <div className="overflow-x-auto border border-slate-200 rounded-xl">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                  <th className="py-2.5 px-3">Matière / Discipline</th>
+                  <th className="py-2.5 px-3">Domaine d’apprentissage</th>
+                  <th className="py-2.5 px-3 text-center">Coeff. Officiel</th>
+                  <th className="py-2.5 px-3">Professeur Enseignant</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {defaultSubjectsList.map((sub) => {
+                  const key = `${selectedClass?.id}-${sub.id}`;
+                  const currentTeacherId = assignedCourseTeacher[key] || (teachers[0]?.id ?? '');
+                  const currentTeacher = teachers.find((t) => t.id === currentTeacherId);
+
+                  return (
+                    <tr key={sub.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-3 px-3">
+                        <span className="font-bold text-slate-900 block">{sub.name}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">Code : {sub.code}</span>
+                      </td>
+                      <td className="py-3 px-3 text-slate-600 font-medium">
+                        {sub.category}
+                      </td>
+                      <td className="py-3 px-3 text-center font-bold text-slate-800">
+                        {sub.defaultCoefficient}
+                      </td>
+                      <td className="py-3 px-3">
+                        <select
+                          value={currentTeacherId}
+                          onChange={(e) => {
+                            const newTId = e.target.value;
+                            setAssignedCourseTeacher((prev) => ({ ...prev, [key]: newTId }));
+                            if (onAssignCourse && selectedClass) {
+                              onAssignCourse(selectedClass.id, sub.id, newTId);
+                            }
+                            const tFound = teachers.find((t) => t.id === newTId);
+                            setSuccessMsg(
+                              tFound
+                                ? `✓ ${tFound.fullName} affecté au cours de ${sub.name} en ${selectedClass?.name}.`
+                                : 'Affectation mise à jour.'
+                            );
+                            setTimeout(() => setSuccessMsg(null), 3500);
+                          }}
+                          className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 font-medium focus:ring-1 focus:ring-teal-500"
+                        >
+                          <option value="">-- Sélectionner un enseignant --</option>
+                          {teachers.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.fullName} ({t.specialty})
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

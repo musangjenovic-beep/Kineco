@@ -39,6 +39,7 @@ import { DisciplineView } from './components/DisciplineView';
 import { ComptableFinancialView } from './components/ComptableFinancialView';
 import { EnseignantView } from './components/EnseignantView';
 import { ParentView } from './components/ParentView';
+import { buildOfficialBulletin } from './utils/bulletinGenerator';
 
 import {
   DEFAULT_SCHOOL,
@@ -115,6 +116,7 @@ export default function App() {
   const [isNewSchoolModalOpen, setIsNewSchoolModalOpen] = useState(false);
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [activeNavTab, setActiveNavTab] = useState<string>('overview');
   const [teacherActiveTab, setTeacherActiveTab] = useState<TeacherTabType>('classes');
   const [teacherUnreadMessages, setTeacherUnreadMessages] = useState<number>(0);
 
@@ -139,6 +141,7 @@ export default function App() {
   const handleLoginSuccess = (session: UserSession) => {
     setCurrentUser(session);
     setCurrentRole(session.role);
+    setActiveNavTab('overview');
     if (session.schoolId) {
       const match = schools.find((s) => s.id === session.schoolId);
       if (match) setCurrentSchool(match);
@@ -149,25 +152,85 @@ export default function App() {
     localStorage.removeItem('edukin_session');
     setCurrentUser(null);
     setIsUserManagementOpen(false);
+    setActiveNavTab('overview');
   };
 
-  // Load official bulletin when student selected
+  const handleSelectNavTab = (tab: string) => {
+    setActiveNavTab(tab);
+    if (currentRole === 'enseignant') {
+      setTeacherActiveTab(tab as TeacherTabType);
+    }
+    if (tab === 'users') {
+      setIsUserManagementOpen(true);
+    } else {
+      setIsUserManagementOpen(false);
+    }
+    if (tab === 'bulletins' || tab === 'bulletin') {
+      const targetStudent = students[0];
+      if (targetStudent) {
+        setBulletinStudentId(targetStudent.id);
+      }
+    }
+  };
+
+  // Automated resilient bulletin generation: works even if data is partial or incomplete!
   useEffect(() => {
     if (!bulletinStudentId || !currentSchool) {
       setBulletinData(null);
       return;
     }
-    fetch(`/api/bulletins/${bulletinStudentId}?schoolId=${currentSchool.id}`)
-      .then((res) => {
-        if (res.ok) return res.json();
-        throw new Error('Bulletin introuvable');
+
+    const targetStudent = students.find((s) => s.id === bulletinStudentId) || students[0];
+    if (!targetStudent) {
+      setBulletinData(null);
+      return;
+    }
+
+    const targetClass = classes.find((c) => c.id === targetStudent.classId) || classes[0] || {
+      id: 'cls-def',
+      schoolId: currentSchool.id,
+      name: 'Classe d’Enseignement',
+      level: 'Secondaire',
+      section: 'Générale',
+      capacity: 45,
+      academicYearId: academicYears[0]?.id || 'ay-2025',
+    };
+    const classStudents = students.filter((s) => s.classId === targetClass.id);
+
+    // 1. Immediately build resilient local official bulletin
+    const generated = buildOfficialBulletin({
+      student: targetStudent,
+      school: currentSchool,
+      schoolClass: targetClass,
+      subjects: subjects.length > 0 ? subjects : DEFAULT_SUBJECTS,
+      grades: grades.length > 0 ? grades : DEFAULT_GRADES,
+      academicPeriods: academicPeriods.length > 0 ? academicPeriods : DEFAULT_PERIODS,
+      academicYear: academicYears[0] || DEFAULT_ACADEMIC_YEARS[0],
+      allStudentsInClass: classStudents.length > 0 ? classStudents : [targetStudent],
+      attendanceRecords: attendance,
+    });
+
+    setBulletinData(generated);
+
+    // 2. Also query backend API in background if available
+    fetch(`/api/students/${bulletinStudentId}/bulletin?schoolId=${currentSchool.id}`)
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const ct = res.headers.get('content-type');
+        if (ct && ct.includes('application/json')) {
+          return await res.json();
+        }
+        return null;
       })
-      .then((data: BulletinData) => setBulletinData(data))
+      .then((serverBulletin) => {
+        if (serverBulletin && serverBulletin.student) {
+          setBulletinData(serverBulletin);
+        }
+      })
       .catch((err) => {
-        console.error('Erreur chargement bulletin:', err);
-        setBulletinData(null);
+        console.warn('Backend bulletin fetch fallback:', err);
       });
-  }, [bulletinStudentId, currentSchool]);
+  }, [bulletinStudentId, currentSchool?.id]);
 
   // Fetch initial schools list
   useEffect(() => {
@@ -287,6 +350,24 @@ export default function App() {
     if (res.ok) {
       const updatedClass = await res.json();
       setClasses((prev) => prev.map((c) => (c.id === classId ? updatedClass : c)));
+    }
+  };
+
+  const handleAssignCourse = async (classId: string, subjectId: string, teacherId: string) => {
+    if (!currentSchool) return;
+    try {
+      await fetch('/api/class-subjects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schoolId: currentSchool.id,
+          classId,
+          subjectId,
+          teacherId,
+        }),
+      });
+    } catch (err) {
+      console.warn('Class subject assignment fallback:', err);
     }
   };
 
@@ -595,10 +676,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans transition-colors">
       {/* Sleek Modern Collapsible Sidebar strictly for Teacher role */}
-      {currentSchool && currentRole === 'enseignant' && (
+      {currentSchool && currentUser && currentRole === 'enseignant' && (
         <SidebarNav
           activeTab={teacherActiveTab}
-          onSelectTab={(tab) => setTeacherActiveTab(tab)}
+          onSelectTab={setTeacherActiveTab}
           unreadMessagesCount={teacherUnreadMessages}
           isTitulaire={true}
           isDarkMode={isDarkMode}
@@ -606,7 +687,9 @@ export default function App() {
           currentUser={currentUser}
           currentRole={currentRole}
           classes={classes}
-          onSelectClass={() => setTeacherActiveTab('classes')}
+          onSelectClass={(clsId) => {
+            setTeacherActiveTab('classes');
+          }}
           onOpenUserManagement={() => setIsUserManagementOpen(true)}
           onLogout={handleLogout}
           isMobileOpen={isMobileSidebarOpen}
@@ -615,15 +698,16 @@ export default function App() {
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 w-full">
         {/* Top Header */}
         {currentSchool && (
           <Header
-            userName={currentUser?.fullName || 'Professeur'}
+            userName={currentUser?.fullName || 'Utilisateur'}
             userRole={currentRole}
             isMenuOpen={isMobileSidebarOpen}
             onToggleMenu={() => setIsMobileSidebarOpen((prev) => !prev)}
             onLogout={handleLogout}
+            onOpenUserManagement={() => setIsUserManagementOpen(true)}
           />
         )}
 
@@ -637,6 +721,19 @@ export default function App() {
                 currentUserRole={currentRole}
                 currentUserId={currentUser?.id}
                 onClose={() => setIsUserManagementOpen(false)}
+              />
+            ) : activeNavTab === 'profil' || (currentRole === 'enseignant' && teacherActiveTab === 'profil') ? (
+              <TeacherProfileView
+                currentUser={currentUser}
+                currentSchool={currentSchool}
+                classes={classes}
+                subjects={subjects}
+                teachers={teachers}
+                onBackToClasses={() => {
+                  setActiveNavTab('overview');
+                  if (currentRole === 'enseignant') setTeacherActiveTab('classes');
+                }}
+                onUpdateCurrentUser={(updated) => setCurrentUser(updated)}
               />
             ) : (
               <>
@@ -658,11 +755,13 @@ export default function App() {
                     students={students}
                     classes={classes}
                     teachers={teachers}
+                    subjects={subjects}
                     attendance={attendance}
                     announcements={announcements}
                     onOpenBulletinForStudent={(stuId) => setBulletinStudentId(stuId)}
                     onOpenUserManagement={() => setIsUserManagementOpen(true)}
                     onAssignTitulaire={handleAssignTitulaire}
+                    onAssignCourse={handleAssignCourse}
                   />
                 )}
 
@@ -692,9 +791,11 @@ export default function App() {
                     classes={classes}
                     subjects={subjects}
                     students={students}
+                    teachers={teachers}
                     grades={grades}
                     academicPeriods={academicPeriods}
                     onOpenBulletin={(stuId) => setBulletinStudentId(stuId)}
+                    onAssignCourse={handleAssignCourse}
                   />
                 )}
 
@@ -731,40 +832,28 @@ export default function App() {
 
                 {/* ENSEIGNANT ROLE */}
                 {currentRole === 'enseignant' && (
-                  teacherActiveTab === 'profil' ? (
-                    <TeacherProfileView
-                      currentUser={currentUser}
-                      currentSchool={currentSchool}
-                      classes={classes}
-                      subjects={subjects}
-                      teachers={teachers}
-                      onBackToClasses={() => setTeacherActiveTab('classes')}
-                      onUpdateCurrentUser={(updated) => setCurrentUser(updated)}
-                    />
-                  ) : (
-                    <EnseignantView
-                      school={currentSchool}
-                      classes={classes}
-                      subjects={subjects}
-                      students={students}
-                      grades={grades}
-                      periods={academicPeriods}
-                      attendance={attendance}
-                      currentUser={currentUser}
-                      teachers={teachers}
-                      parents={parents}
-                      activeTab={teacherActiveTab as any}
-                      onTabChange={(tab) => setTeacherActiveTab(tab)}
-                      onUnreadCountChange={(count) => setTeacherUnreadMessages(count)}
-                      onSaveGrade={handleSaveGrade}
-                      onSaveGradeBatch={handleSaveGradesBatch}
-                      onMarkAttendance={handleMarkAttendance}
-                      onSaveAttendanceBatch={handleSaveAttendanceBatch}
-                      onSendSmsAlert={async (phone, name, msg) => {
-                        await handleSendSms(phone, name, msg, 'information');
-                      }}
-                    />
-                  )
+                  <EnseignantView
+                    school={currentSchool}
+                    classes={classes}
+                    subjects={subjects}
+                    students={students}
+                    grades={grades}
+                    periods={academicPeriods}
+                    attendance={attendance}
+                    currentUser={currentUser}
+                    teachers={teachers}
+                    parents={parents}
+                    activeTab={teacherActiveTab as any}
+                    onTabChange={(tab) => setTeacherActiveTab(tab)}
+                    onUnreadCountChange={(count) => setTeacherUnreadMessages(count)}
+                    onSaveGrade={handleSaveGrade}
+                    onSaveGradeBatch={handleSaveGradesBatch}
+                    onMarkAttendance={handleMarkAttendance}
+                    onSaveAttendanceBatch={handleSaveAttendanceBatch}
+                    onSendSmsAlert={async (phone, name, msg) => {
+                      await handleSendSms(phone, name, msg, 'information');
+                    }}
+                  />
                 )}
 
                 {/* PARENT / RESPONSABLE / ELEVE ROLE */}

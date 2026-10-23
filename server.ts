@@ -363,6 +363,35 @@ checkSupabaseConnection().then(async (status) => {
     res.status(201).json(newSub);
   });
 
+  // Class Subjects (Attribution des cours & professeurs aux classes - 7e, 8e EB, etc.)
+  app.get('/api/class-subjects', (req: Request, res: Response) => {
+    const schoolId = (req.query.schoolId as string) || 'sch-bobokoli';
+    const classId = req.query.classId as string | undefined;
+    res.json(db.getClassSubjects(schoolId, classId));
+  });
+
+  app.post('/api/class-subjects', (req: Request, res: Response) => {
+    const { schoolId, classId, subjectId, teacherId, coefficient, maxScore, weeklyHours } = req.body;
+    if (!classId || !subjectId) {
+      return res.status(400).json({ error: 'Classe et matière obligatoires' });
+    }
+    const created = db.assignClassSubject({
+      schoolId: schoolId || 'sch-bobokoli',
+      classId,
+      subjectId,
+      teacherId: teacherId || '',
+      coefficient: Number(coefficient) || 1,
+      maxScore: Number(maxScore) || 20,
+      weeklyHours: Number(weeklyHours) || 2,
+    });
+    res.status(201).json(created);
+  });
+
+  app.delete('/api/class-subjects/:id', (req: Request, res: Response) => {
+    const deleted = db.deleteClassSubject(req.params.id);
+    res.json({ success: deleted });
+  });
+
   // 5. Élèves
   app.get('/api/students', async (req: Request, res: Response) => {
     const schoolId = (req.query.schoolId as string) || 'sch-bobokoli';

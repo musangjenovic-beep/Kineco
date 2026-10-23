@@ -263,27 +263,28 @@ export const UserManagementView = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {onClose && (
+              <button
+                id="btn-back-to-dashboard-top"
+                onClick={onClose}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors border border-slate-200"
+              >
+                <span>← Retour au Tableau de Bord</span>
+              </button>
+            )}
+
             <button
               id="btn-open-create-user-modal"
               onClick={() => {
                 setUsername(generateSuggestedUsername(role, fullName));
                 setIsCreateModalOpen(true);
               }}
-              className="flex items-center gap-2 px-3.5 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
             >
               <UserPlus className="w-4 h-4" />
-              <span>Créer un Nouvel Accès</span>
+              <span>+ Créer un Nouveau Profil</span>
             </button>
-
-            {onClose && (
-              <button
-                onClick={onClose}
-                className="p-1.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
           </div>
         </div>
 
@@ -408,114 +409,204 @@ export const UserManagementView = ({
         </div>
       </div>
 
-      {/* Users Table */}
-      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold">
-                <th className="py-3 px-4">Utilisateur & Identifiant</th>
-                <th className="py-3 px-4">Rôle Attribué</th>
-                <th className="py-3 px-4">Coordonnées</th>
-                <th className="py-3 px-4">Statut</th>
-                <th className="py-3 px-4 text-right">Actions Sécurisées</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-400">
-                    Chargement des comptes utilisateurs...
-                  </td>
-                </tr>
-              ) : filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-400">
-                    Aucun compte utilisateur ne correspond à votre filtre.
-                  </td>
-                </tr>
-              ) : (
-                filteredUsers.map((u) => {
-                  const badge = roleBadges[u.role] || { label: u.role, color: 'bg-slate-100 text-slate-700' };
-                  const isCopied = copiedUserId === u.id;
+      {/* Users List & Table (Full-width responsive cards on mobile, table on desktop - zero horizontal scroll!) */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden w-full shadow-xs">
+        {isLoading ? (
+          <div className="py-12 text-center text-slate-400 text-xs">
+            Chargement des comptes utilisateurs...
+          </div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="py-12 text-center text-slate-400 text-xs">
+            Aucun compte utilisateur ne correspond à votre filtre.
+          </div>
+        ) : (
+          <>
+            {/* MOBILE VIEW: 100% Full-Width Responsive Cards */}
+            <div className="block md:hidden divide-y divide-slate-100 w-full">
+              {filteredUsers.map((u) => {
+                const badge = roleBadges[u.role] || { label: u.role, color: 'bg-slate-100 text-slate-700' };
+                const isCopied = copiedUserId === u.id;
 
-                  return (
-                    <tr key={u.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-xs">
-                            {u.fullName.charAt(0)}
-                          </div>
-                          <div>
-                            <div className="font-semibold text-slate-900">{u.fullName}</div>
-                            <div className="font-mono text-[11px] text-slate-500 flex items-center gap-1.5">
-                              <span>ID: {u.username}</span>
-                              <button
-                                onClick={() => handleCopyCredentials(u)}
-                                title="Copier les informations de connexion"
-                                className="text-slate-400 hover:text-slate-700"
-                              >
-                                {isCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                              </button>
+                return (
+                  <div key={u.id} className="p-4 space-y-3 w-full bg-white hover:bg-slate-50/50 transition-colors">
+                    {/* Header: Avatar, Name, Status */}
+                    <div className="flex items-start justify-between gap-2 w-full">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-800 font-bold flex items-center justify-center text-xs shrink-0">
+                          {u.fullName.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900 text-xs leading-snug">{u.fullName}</div>
+                          <span className={`inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-semibold border ${badge.color}`}>
+                            {badge.label}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${
+                          u.active
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-rose-50 text-rose-700 border border-rose-200'
+                        }`}
+                      >
+                        {u.active ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                        <span>{u.active ? 'Actif' : 'Suspendu'}</span>
+                      </span>
+                    </div>
+
+                    {/* ID & Credentials */}
+                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between text-xs w-full">
+                      <div className="font-mono text-slate-700 text-[11px] truncate">
+                        <span className="text-slate-400 font-sans mr-1">ID:</span>
+                        <span className="font-bold">{u.username}</span>
+                      </div>
+                      <button
+                        onClick={() => handleCopyCredentials(u)}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 px-2 py-1 rounded bg-white border border-slate-200 shadow-2xs shrink-0"
+                      >
+                        {isCopied ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            <span className="text-emerald-600">Copié</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span>Copier</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Contact Info if available */}
+                    {(u.email || u.phone) && (
+                      <div className="text-[11px] text-slate-600 space-y-0.5">
+                        {u.email && <div className="truncate text-slate-500">✉ {u.email}</div>}
+                        {u.phone && <div className="text-slate-500">☎ {u.phone}</div>}
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="pt-2 flex items-center gap-2 w-full">
+                      <button
+                        onClick={() => handleResetPassword(u)}
+                        className="flex-1 py-1.5 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] transition-colors text-center"
+                      >
+                        Changer Code
+                      </button>
+
+                      <button
+                        onClick={() => handleToggleStatus(u)}
+                        className={`flex-1 py-1.5 px-3 rounded-lg font-semibold text-[11px] transition-colors text-center border ${
+                          u.active
+                            ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                            : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                        }`}
+                      >
+                        {u.active ? 'Désactiver' : 'Activer'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* DESKTOP VIEW: Clean Table */}
+            <div className="hidden md:block overflow-x-auto w-full">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold">
+                    <th className="py-3 px-4">Utilisateur & Identifiant</th>
+                    <th className="py-3 px-4">Rôle Attribué</th>
+                    <th className="py-3 px-4">Coordonnées</th>
+                    <th className="py-3 px-4">Statut</th>
+                    <th className="py-3 px-4 text-right">Actions Sécurisées</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredUsers.map((u) => {
+                    const badge = roleBadges[u.role] || { label: u.role, color: 'bg-slate-100 text-slate-700' };
+                    const isCopied = copiedUserId === u.id;
+
+                    return (
+                      <tr key={u.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-xs">
+                              {u.fullName.charAt(0)}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-slate-900">{u.fullName}</div>
+                              <div className="font-mono text-[11px] text-slate-500 flex items-center gap-1.5">
+                                <span>ID: {u.username}</span>
+                                <button
+                                  onClick={() => handleCopyCredentials(u)}
+                                  title="Copier les informations de connexion"
+                                  className="text-slate-400 hover:text-slate-700"
+                                >
+                                  {isCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                                </button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="py-3.5 px-4">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium border ${badge.color}`}>
-                          {badge.label}
-                        </span>
-                      </td>
+                        <td className="py-3.5 px-4">
+                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium border ${badge.color}`}>
+                            {badge.label}
+                          </span>
+                        </td>
 
-                      <td className="py-3.5 px-4">
-                        <div className="space-y-0.5 text-[11px] text-slate-600">
-                          {u.email && <div>{u.email}</div>}
-                          {u.phone && <div className="text-slate-400">{u.phone}</div>}
-                          {!u.email && !u.phone && <span className="text-slate-400 italic">Non renseigné</span>}
-                        </div>
-                      </td>
+                        <td className="py-3.5 px-4">
+                          <div className="space-y-0.5 text-[11px] text-slate-600">
+                            {u.email && <div>{u.email}</div>}
+                            {u.phone && <div className="text-slate-400">{u.phone}</div>}
+                            {!u.email && !u.phone && <span className="text-slate-400 italic">Non renseigné</span>}
+                          </div>
+                        </td>
 
-                      <td className="py-3.5 px-4">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${
-                            u.active
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-rose-50 text-rose-700 border border-rose-200'
-                          }`}
-                        >
-                          {u.active ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                          <span>{u.active ? 'Actif' : 'Suspendu'}</span>
-                        </span>
-                      </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${
+                              u.active
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}
+                          >
+                            {u.active ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                            <span>{u.active ? 'Actif' : 'Suspendu'}</span>
+                          </span>
+                        </td>
 
-                      <td className="py-3.5 px-4 text-right space-x-1.5">
-                        <button
-                          onClick={() => handleResetPassword(u)}
-                          className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-[11px] transition-colors"
-                          title="Réinitialiser le mot de passe"
-                        >
-                          Changer Code
-                        </button>
+                        <td className="py-3.5 px-4 text-right space-x-1.5">
+                          <button
+                            onClick={() => handleResetPassword(u)}
+                            className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-[11px] transition-colors"
+                            title="Réinitialiser le mot de passe"
+                          >
+                            Changer Code
+                          </button>
 
-                        <button
-                          onClick={() => handleToggleStatus(u)}
-                          className={`px-2.5 py-1 rounded font-medium text-[11px] transition-colors ${
-                            u.active
-                              ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
-                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'
-                          }`}
-                        >
-                          {u.active ? 'Désactiver' : 'Activer'}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                          <button
+                            onClick={() => handleToggleStatus(u)}
+                            className={`px-2.5 py-1 rounded font-medium text-[11px] transition-colors ${
+                              u.active
+                                ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
+                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'
+                            }`}
+                          >
+                            {u.active ? 'Désactiver' : 'Activer'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       {/* MODAL: Créer un nouvel utilisateur */}

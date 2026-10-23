@@ -15,13 +15,28 @@ import {
   Award,
   X,
   Shield,
+  Layers,
+  Users,
+  FileText,
+  DollarSign,
+  TrendingUp,
+  AlertCircle,
+  Building,
+  Database,
+  UserCheck,
+  ShieldCheck,
 } from 'lucide-react';
-import { TeacherTabType } from './Header';
 import { SchoolClass, UserSession, UserRole } from '../types';
 
+export interface NavItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
 interface SidebarNavProps {
-  activeTab: TeacherTabType;
-  onSelectTab: (tab: TeacherTabType) => void;
+  activeTab: string;
+  onSelectTab: (tab: any) => void;
   unreadMessagesCount?: number;
   isTitulaire?: boolean;
   isDarkMode: boolean;
@@ -40,11 +55,11 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   activeTab,
   onSelectTab,
   unreadMessagesCount = 0,
-  isTitulaire = false,
+  isTitulaire = true,
   isDarkMode,
   onToggleDarkMode,
   currentUser,
-  currentRole,
+  currentRole = 'enseignant',
   classes = [],
   onSelectClass,
   onLogout,
@@ -56,7 +71,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showSupportModal, setShowSupportModal] = useState(false);
 
-  // Group badge colors matching reference design
+  // Group badge colors
   const groupBadgeColors = [
     'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700',
     'bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-700',
@@ -69,8 +84,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     cls.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleTabClick = (tab: TeacherTabType) => {
-    onSelectTab(tab);
+  const handleTabClick = (tabId: string) => {
+    onSelectTab(tabId);
     onCloseMobile();
   };
 
@@ -80,9 +95,110 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     onCloseMobile();
   };
 
-  const userName = currentUser?.fullName || 'Professeur';
-  const userEmail = currentUser?.email || 'professeur@masomo.cd';
+  const userName = currentUser?.fullName || 'Utilisateur';
+  const userEmail = currentUser?.email || 'utilisateur@masomo.cd';
   const userInitial = userName.charAt(0).toUpperCase();
+
+  // Determine Nav Items per Role
+  const getNavItems = (): NavItem[] => {
+    switch (currentRole) {
+      case 'enseignant':
+        return [
+          { id: 'classes', label: 'Mes Classes', icon: Home },
+          { id: 'schedule', label: 'Horaire & Tâches', icon: Clock },
+          { id: 'attendance', label: 'Appel Journalier', icon: UserCheck },
+          { id: 'grades', label: 'Saisie des Notes', icon: FileText },
+          ...(isTitulaire ? [{ id: 'titulaire', label: 'Espace Titulaire', icon: Award }] : []),
+          { id: 'messages', label: 'Messages & Alertes', icon: Bell },
+          { id: 'profil', label: 'Profil Enseignant', icon: User },
+        ];
+
+      case 'directeur':
+        return [
+          { id: 'overview', label: 'Tableau de Bord', icon: Home },
+          { id: 'titulaires', label: 'Titulaires & Cours 7e/8e', icon: Award },
+          { id: 'classes', label: 'Gestion des Classes', icon: Layers },
+          { id: 'bulletins', label: 'Bulletins & Délibérations', icon: FileText },
+          { id: 'finances', label: 'Finances & Frais', icon: DollarSign },
+          { id: 'discipline', label: 'Discipline & Assiduité', icon: ShieldCheck },
+          { id: 'users', label: 'Gestion des Accès', icon: Users },
+          { id: 'profil', label: 'Profil Direction', icon: User },
+        ];
+
+      case 'directeur_etudes':
+        return [
+          { id: 'overview', label: 'Supervision Pédagogique', icon: Award },
+          { id: 'cours', label: 'Cours 7e, 8e EB & Humanités', icon: BookOpen },
+          { id: 'bulletins', label: 'Validation des Bulletins', icon: FileText },
+          { id: 'classes', label: 'Suivi des Classes', icon: Layers },
+          { id: 'profil', label: 'Profil Direction Études', icon: User },
+        ];
+
+      case 'directeur_discipline':
+        return [
+          { id: 'overview', label: 'Registre Disciplinaire', icon: ShieldCheck },
+          { id: 'attendance', label: 'Assiduité & Retards', icon: Clock },
+          { id: 'incidents', label: 'Incidents & Sanctions', icon: AlertCircle },
+          { id: 'sms', label: 'Convocations Parents', icon: Bell },
+          { id: 'profil', label: 'Profil Discipline', icon: User },
+        ];
+
+      case 'comptable':
+        return [
+          { id: 'overview', label: 'Trésorerie & Caisse', icon: DollarSign },
+          { id: 'payments', label: 'Bordereaux de Paiement', icon: FileText },
+          { id: 'fees', label: 'Grille des Frais', icon: Layers },
+          { id: 'mobile_money', label: 'Mobile Money RDC', icon: TrendingUp },
+          { id: 'profil', label: 'Profil Comptabilité', icon: User },
+        ];
+
+      case 'admin_scolaire':
+        return [
+          { id: 'overview', label: 'Secrétariat Scolaire', icon: Home },
+          { id: 'inscriptions', label: 'Élèves & Matricules', icon: Users },
+          { id: 'classes', label: 'Classes & Titulaires', icon: Layers },
+          { id: 'subjects', label: 'Matières & Programmes', icon: BookOpen },
+          { id: 'periods', label: 'Années & Périodes', icon: Clock },
+          { id: 'profil', label: 'Profil Secrétariat', icon: User },
+        ];
+
+      case 'parent':
+        return [
+          { id: 'overview', label: 'Mes Enfants', icon: Users },
+          { id: 'bulletins', label: 'Bulletins Scolaires', icon: Award },
+          { id: 'attendance', label: 'Présences & Retards', icon: Clock },
+          { id: 'payments', label: 'Paiement des Frais', icon: DollarSign },
+          { id: 'messages', label: 'Messages de l’École', icon: Bell },
+          { id: 'profil', label: 'Profil Parent', icon: User },
+        ];
+
+      case 'eleve':
+        return [
+          { id: 'overview', label: 'Mon Espace Élève', icon: Home },
+          { id: 'bulletin', label: 'Mon Bulletin Officiel', icon: Award },
+          { id: 'cours', label: 'Mes Cours & Matières', icon: BookOpen },
+          { id: 'horaire', label: 'Mon Emploi du Temps', icon: Clock },
+          { id: 'profil', label: 'Profil Élève', icon: User },
+        ];
+
+      case 'super_admin':
+        return [
+          { id: 'overview', label: 'Plateforme Nationale', icon: Home },
+          { id: 'schools', label: 'Établissements RDC', icon: Building },
+          { id: 'users', label: 'Utilisateurs Globaux', icon: Users },
+          { id: 'supabase', label: 'Supabase Cloud DB', icon: Database },
+          { id: 'profil', label: 'Profil Administrateur', icon: User },
+        ];
+
+      default:
+        return [
+          { id: 'overview', label: 'Accueil', icon: Home },
+          { id: 'profil', label: 'Mon Profil', icon: User },
+        ];
+    }
+  };
+
+  const navItems = getNavItems();
 
   const sidebarContent = (
     <div
@@ -101,7 +217,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
 
       {/* Top Section */}
       <div className="flex-1 overflow-y-auto px-3.5 py-4 space-y-4">
-        
         {/* macOS Style 3 Dots Window Controls */}
         <div className="flex items-center justify-between px-1 pb-1">
           <div className="flex items-center gap-1.5">
@@ -166,125 +281,34 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             </span>
           )}
 
-          {/* 1. Mes Classes */}
-          <div className="relative">
-            {activeTab === 'classes' && (
-              <span className="absolute -left-3.5 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-red-500 rounded-r-full z-10" />
-            )}
-            <button
-              id="sidebar-tab-classes"
-              onClick={() => handleTabClick('classes')}
-              title={isCollapsed ? 'Mes Classes' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all group ${
-                activeTab === 'classes'
-                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
-              } ${isCollapsed ? 'justify-center px-0' : ''}`}
-            >
-              <Home className={`w-4 h-4 shrink-0 ${activeTab === 'classes' ? 'text-slate-900 dark:text-white' : ''}`} />
-              {!isCollapsed && <span>Mes Classes</span>}
-            </button>
-          </div>
-
-          {/* 2. Horaire & Tâches */}
-          <div className="relative">
-            {activeTab === 'schedule' && (
-              <span className="absolute -left-3.5 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-red-500 rounded-r-full z-10" />
-            )}
-            <button
-              id="sidebar-tab-schedule"
-              onClick={() => handleTabClick('schedule')}
-              title={isCollapsed ? 'Horaire & Tâches' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all group ${
-                activeTab === 'schedule'
-                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
-              } ${isCollapsed ? 'justify-center px-0' : ''}`}
-            >
-              <Clock className={`w-4 h-4 shrink-0 ${activeTab === 'schedule' ? 'text-slate-900 dark:text-white' : ''}`} />
-              {!isCollapsed && <span>Horaire & Tâches</span>}
-            </button>
-          </div>
-
-          {/* 3. Messages & Alertes */}
-          <div className="relative">
-            {activeTab === 'messages' && (
-              <span className="absolute -left-3.5 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-red-500 rounded-r-full z-10" />
-            )}
-            <button
-              id="sidebar-tab-messages"
-              onClick={() => handleTabClick('messages')}
-              title={isCollapsed ? 'Messages' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all group ${
-                activeTab === 'messages'
-                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
-              } ${isCollapsed ? 'justify-center px-0' : ''}`}
-            >
-              <Bell className={`w-4 h-4 shrink-0 ${activeTab === 'messages' ? 'text-slate-900 dark:text-white' : ''}`} />
-              {!isCollapsed && (
-                <>
-                  <span className="flex-1 text-left">Messages & Alertes</span>
-                  {unreadMessagesCount > 0 ? (
-                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-red-500 text-white min-w-5 text-center">
-                      {unreadMessagesCount}
-                    </span>
-                  ) : (
-                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-red-500 text-white min-w-5 text-center">
-                      14
-                    </span>
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <div key={item.id} className="relative">
+                {isActive && (
+                  <span className="absolute -left-3.5 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-red-500 rounded-r-full z-10" />
+                )}
+                <button
+                  id={`sidebar-tab-${item.id}`}
+                  onClick={() => handleTabClick(item.id)}
+                  title={isCollapsed ? item.label : undefined}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all group ${
+                    isActive
+                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
+                  } ${isCollapsed ? 'justify-center px-0' : ''}`}
+                >
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-slate-900 dark:text-white' : ''}`} />
+                  {!isCollapsed && (
+                    <span className="flex-1 text-left">{item.label}</span>
                   )}
-                </>
-              )}
-              {isCollapsed && (
-                <span className="absolute top-1.5 right-4 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#181B20]" />
-              )}
-            </button>
-          </div>
+                </button>
+              </div>
+            );
+          })}
 
-          {/* 4. Profil Enseignant (Full Page in Main App View) */}
-          <div className="relative">
-            {activeTab === 'profil' && (
-              <span className="absolute -left-3.5 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-red-500 rounded-r-full z-10" />
-            )}
-            <button
-              id="sidebar-tab-profil"
-              onClick={() => handleTabClick('profil')}
-              title={isCollapsed ? 'Profil Enseignant' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all group ${
-                activeTab === 'profil'
-                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
-              } ${isCollapsed ? 'justify-center px-0' : ''}`}
-            >
-              <User className={`w-4 h-4 shrink-0 ${activeTab === 'profil' ? 'text-slate-900 dark:text-white' : ''}`} />
-              {!isCollapsed && <span>Profil Enseignant</span>}
-            </button>
-          </div>
-
-          {/* 5. Titulaire (if applicable) */}
-          {isTitulaire && (
-            <div className="relative">
-              {activeTab === 'titulaire' && (
-                <span className="absolute -left-3.5 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-red-500 rounded-r-full z-10" />
-              )}
-              <button
-                id="sidebar-tab-titulaire"
-                onClick={() => handleTabClick('titulaire')}
-                title={isCollapsed ? 'Titulaire' : undefined}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all group ${
-                  activeTab === 'titulaire'
-                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
-                } ${isCollapsed ? 'justify-center px-0' : ''}`}
-              >
-                <Award className={`w-4 h-4 shrink-0 ${activeTab === 'titulaire' ? 'text-slate-900 dark:text-white' : ''}`} />
-                {!isCollapsed && <span>Espace Titulaire</span>}
-              </button>
-            </div>
-          )}
-
-          {/* 6. Support & Aide */}
+          {/* Support & Aide */}
           <button
             id="sidebar-tab-support"
             onClick={() => {
@@ -297,10 +321,10 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             }`}
           >
             <HelpCircle className="w-4 h-4 shrink-0" />
-            {!isCollapsed && <span>Support</span>}
+            {!isCollapsed && <span>Support & Assistance</span>}
           </button>
 
-          {/* 7. SuperAdmin Users Management (if applicable) */}
+          {/* SuperAdmin Users Management Shortcut */}
           {currentRole === 'super_admin' && onOpenUserManagement && (
             <button
               id="sidebar-tab-superadmin"
@@ -308,13 +332,13 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                 onOpenUserManagement();
                 onCloseMobile();
               }}
-              title={isCollapsed ? 'Utilisateurs' : undefined}
+              title={isCollapsed ? 'Gestion Globale' : undefined}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition-all ${
                 isCollapsed ? 'justify-center px-0' : ''
               }`}
             >
               <Shield className="w-4 h-4 shrink-0" />
-              {!isCollapsed && <span>Utilisateurs & Accès</span>}
+              {!isCollapsed && <span>Comptes & Droits</span>}
             </button>
           )}
         </div>
@@ -323,10 +347,10 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
         {!isCollapsed && filteredClasses.length > 0 && (
           <div className="space-y-1 pt-2 border-t border-slate-100 dark:border-slate-800/60">
             <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-2 block mb-1">
-              Group
+              Classes & Sections
             </span>
 
-            <div className="space-y-0.5 max-h-48 overflow-y-auto">
+            <div className="space-y-0.5 max-h-40 overflow-y-auto">
               {filteredClasses.map((cls, idx) => {
                 const colorBadge = groupBadgeColors[idx % groupBadgeColors.length];
                 return (
@@ -352,10 +376,9 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
         )}
       </div>
 
-      {/* Bottom Controls Area (Segmented Light/Dark + Profile Avatar) */}
+      {/* Bottom Controls Area (Segmented Light/Dark + Profile Avatar + Logout) */}
       <div className="p-3 border-t border-slate-100 dark:border-slate-800 space-y-3 shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
-        
-        {/* Segmented Light/Dark Switch (Directly in the menu) */}
+        {/* Segmented Light/Dark Switch */}
         {!isCollapsed ? (
           <div className="p-1 rounded-xl bg-slate-100 dark:bg-slate-800/90 flex items-center gap-1">
             <button
@@ -398,11 +421,11 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           </div>
         )}
 
-        {/* User Profile Card at Bottom (Clicking navigates to full Profil page) */}
+        {/* User Profile Card at Bottom */}
         <div className={`flex items-center gap-2.5 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
           <button
             onClick={() => handleTabClick('profil')}
-            className="flex items-center gap-2.5 min-w-0 text-left hover:opacity-80 transition-opacity"
+            className="flex items-center gap-2.5 min-w-0 text-left hover:opacity-80 transition-opacity flex-1"
             title="Consulter et modifier mon profil"
           >
             <div className="w-8 h-8 rounded-full bg-slate-900 dark:bg-slate-700 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs ring-1 ring-slate-200 dark:ring-slate-700">
@@ -450,22 +473,19 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <p className="text-xs text-slate-600 dark:text-slate-300">
-              Assistance technique et pédagogique pour la gestion de votre établissement :
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              Besoin d'assistance pédagogique ou technique ? Contactez l'équipe support EduKin :
             </p>
-            <div className="space-y-1.5 text-xs">
-              <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300">
-                <strong>Email :</strong> support@masomo.cd
-              </div>
-              <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300">
-                <strong>WhatsApp :</strong> +243 81 500 1234
-              </div>
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs space-y-1.5 font-mono text-slate-700 dark:text-slate-300">
+              <div>📧 support@masomo.cd</div>
+              <div>📞 +243 81 500 1234 (Kinshasa)</div>
+              <div>⚡ Statut : Système Opérationnel (RDC)</div>
             </div>
             <button
               onClick={() => setShowSupportModal(false)}
-              className="w-full py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold"
+              className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors"
             >
-              Fermer
+              Compris
             </button>
           </div>
         </div>
@@ -475,34 +495,25 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
 
   return (
     <>
-      {/* Desktop Sticky Sidebar */}
-      <aside className="hidden md:block sticky top-0 h-screen z-30 shrink-0">
+      {/* Desktop Persistent Sidebar */}
+      <aside className="hidden md:block shrink-0 h-screen sticky top-0 z-30">
         {sidebarContent}
       </aside>
 
-      {/* Mobile Drawer with Smooth Sliding Animation */}
-      <div
-        className={`fixed inset-0 z-50 md:hidden transition-all duration-300 ease-out ${
-          isMobileOpen ? 'visible pointer-events-auto' : 'invisible pointer-events-none'
-        }`}
-      >
-        {/* Backdrop Fade In / Fade Out */}
-        <div
-          className={`fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-300 ease-out ${
-            isMobileOpen ? 'opacity-100' : 'opacity-0'
-          }`}
-          onClick={onCloseMobile}
-        />
-
-        {/* Drawer Slide In from Left / Slide Out to Left */}
-        <div
-          className={`relative z-10 w-72 max-w-[82vw] h-full shadow-2xl transform transition-transform duration-300 cubic-bezier(0.16,1,0.3,1) ${
-            isMobileOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
-        >
-          {sidebarContent}
+      {/* Mobile Drawer with Smooth Backdrop */}
+      {isMobileOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity duration-300 animate-in fade-in"
+            onClick={onCloseMobile}
+          />
+          {/* Sidebar Panel sliding from left */}
+          <div className="relative z-10 h-full animate-in slide-in-from-left duration-300">
+            {sidebarContent}
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 };
