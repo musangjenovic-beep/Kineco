@@ -31,13 +31,20 @@ import {
 
 dotenv.config({ override: true });
 
+const TARGET_PROJECT_REF = 'euxxiidyvkwrnlxtwrsb';
 const DEFAULT_SUPABASE_URL = 'https://euxxiidyvkwrnlxtwrsb.supabase.co';
 const DEFAULT_SUPABASE_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1eHhpaWR5dmt3cm5seHR3cnNiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5Mjg1MzM0NiwiZXhwIjoyMTA4NDI5MzQ2fQ.Xbsznv6j8gPb8PQjr0pPad1mTsrhAigjgciYjjJ3_QM';
 
-const supabaseUrl = process.env.SUPABASE_URL?.trim() || DEFAULT_SUPABASE_URL;
+const envUrl = process.env.SUPABASE_URL?.trim();
+const supabaseUrl =
+  envUrl && envUrl.includes(TARGET_PROJECT_REF) ? envUrl : DEFAULT_SUPABASE_URL;
+
+const envKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)?.trim();
 const supabaseKey =
-  (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)?.trim() || DEFAULT_SUPABASE_KEY;
+  envKey && envKey.includes(TARGET_PROJECT_REF) ? envKey : DEFAULT_SUPABASE_KEY;
+
+export { supabase };
 
 let supabase: SupabaseClient | null = null;
 let isConnected = false;
@@ -56,8 +63,6 @@ if (supabaseUrl && supabaseKey) {
     console.error('[Supabase] Failed to initialize client:', err.message);
     lastError = err.message;
   }
-} else {
-  console.log('[Supabase] Credentials not configured yet in process.env. Using in-memory fallback.');
 }
 
 export async function checkSupabaseConnection(): Promise<{
@@ -1264,37 +1269,63 @@ export const dataService = {
   },
 
   // 16. Comptes Utilisateurs (User Accounts)
+  async resolveSupabaseSchoolId(schoolId?: string): Promise<string> {
+    if (!supabase || !schoolId || schoolId === 'platform') return 'platform';
+    try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(schoolId);
+      if (isUuid) {
+        const { data } = await supabase.from('schools').select('id').eq('id', schoolId).maybeSingle();
+        if (data?.id) return data.id;
+      }
+
+      const { data: byCode } = await supabase
+        .from('schools')
+        .select('id')
+        .or(`code.ilike.%${schoolId.replace('sch-', '')}%,name.ilike.%bobokoli%`)
+        .limit(1)
+        .maybeSingle();
+      if (byCode?.id) return byCode.id;
+
+      const { data: firstSchool } = await supabase.from('schools').select('id').limit(1).maybeSingle();
+      if (firstSchool?.id) return firstSchool.id;
+    } catch (err) {
+      console.warn('[Supabase] resolveSupabaseSchoolId fallback:', err);
+    }
+    return 'ed8bdc39-2b57-486b-ad31-7ee5f17444cc'; // Default Collège Bobokoli UUID
+  },
+
   async getUserAccounts(schoolId?: string): Promise<UserAccount[]> {
     const local = db.getUserAccounts(schoolId);
     if (supabase) {
       try {
-        let q = supabase.from('profiles').select('*');
-        if (schoolId && schoolId !== 'platform') {
-          // Resolve school id
-          const { data: sch } = await supabase
-            .from('schools')
-            .select('id')
-            .or(`id.eq.${schoolId},code.eq.${schoolId}`)
-            .maybeSingle();
-          if (sch?.id) {
-            q = q.eq('school_id', sch.id);
-          }
-        }
-        const { data, error } = await q;
-        if (!error && data && data.length > 0) {
+        const { data: authData, error: authErr } = await supabase.auth.admin.listUsers();
+        if (!authErr && authData?.users?.length) {
           const localUsernames = new Set(local.map((u) => u.username.toLowerCase()));
-          for (const p of data) {
-            const suggested = (p.phone || p.full_name?.toLowerCase().replace(/\s+/g, '.')) || 'user';
-            if (!localUsernames.has(suggested.toLowerCase())) {
+          const localIds = new Set(local.map((u) => u.id));
+
+          // Also get profiles to enrich phone & active status
+          const { data: profiles } = await supabase.from('profiles').select('*');
+          const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+
+          for (const u of authData.users) {
+            const meta = u.user_metadata || {};
+            const username = (meta.username || u.email || 'utilisateur').toLowerCase();
+            const fullName = meta.full_name || u.email?.split('@')[0] || 'Utilisateur';
+            const role = (meta.role || 'enseignant') as UserRole;
+            const prof = profileMap.get(u.id);
+            const userSchoolId = meta.school_id || prof?.school_id || schoolId || 'sch-bobokoli';
+
+            if (!localIds.has(u.id) && !localUsernames.has(username)) {
               local.push({
-                id: p.id,
-                schoolId: p.school_id || schoolId || 'sch-bobokoli',
-                fullName: p.full_name,
-                username: suggested,
-                role: p.role,
-                phone: p.phone || '',
-                active: p.active ?? true,
-                createdAt: p.created_at || new Date().toISOString(),
+                id: u.id,
+                schoolId: userSchoolId,
+                fullName,
+                username,
+                email: u.email,
+                phone: prof?.phone || u.phone || meta.phone || '',
+                role,
+                active: prof?.active ?? true,
+                createdAt: u.created_at || new Date().toISOString(),
               });
             }
           }
@@ -1307,66 +1338,129 @@ export const dataService = {
   },
 
   async createUserAccount(schoolId: string, accountData: any): Promise<UserAccount> {
-    // 1. Create in memory first
-    const newAccount = db.createUserAccount({
-      ...accountData,
-      schoolId: schoolId || 'platform',
-    });
+    const validRoles = [
+      'super_admin',
+      'directeur',
+      'admin_scolaire',
+      'directeur_etudes',
+      'directeur_discipline',
+      'comptable',
+      'secretaire',
+      'surveillant',
+      'enseignant',
+      'parent',
+      'eleve',
+    ];
+    const role = validRoles.includes(accountData.role) ? accountData.role : 'enseignant';
+    const cleanUsername = (accountData.username || '').trim().toLowerCase();
+    const cleanFullName = (accountData.fullName || '').trim();
+    const cleanPassword = (accountData.password || 'edukin123').trim();
 
-    // 2. Safely sync to Supabase auth / profiles if service role is available
+    // Determine email for Supabase Auth
+    let userEmail = accountData.email?.trim()?.toLowerCase();
+    if (!userEmail) {
+      if (cleanUsername.includes('@')) {
+        userEmail = cleanUsername;
+      } else {
+        const sanitized = cleanUsername.replace(/[^a-z0-9]/g, '');
+        userEmail = `${sanitized || 'user' + Date.now()}@edukin.cd`;
+      }
+    }
+
+    let authUserId: string | null = null;
+    let targetSchoolId = schoolId || 'sch-bobokoli';
+
+    // 1. Sync to Supabase Auth & Profiles
     if (supabase) {
       try {
-        let targetSchoolId = schoolId;
-        const { data: sch } = await supabase
-          .from('schools')
-          .select('id')
-          .or(`id.eq.${schoolId},code.eq.${schoolId}`)
-          .maybeSingle();
-        if (sch?.id) {
-          targetSchoolId = sch.id;
+        targetSchoolId = await this.resolveSupabaseSchoolId(schoolId);
+
+        // Check if user already exists
+        const { data: existingList } = await supabase.auth.admin.listUsers();
+        const existing = existingList?.users?.find(
+          (u) =>
+            u.email?.toLowerCase() === userEmail ||
+            (u.user_metadata?.username || '').toLowerCase() === cleanUsername
+        );
+
+        if (existing) {
+          authUserId = existing.id;
+          await supabase.auth.admin.updateUserById(existing.id, {
+            password: cleanPassword,
+            user_metadata: {
+              ...existing.user_metadata,
+              full_name: cleanFullName,
+              username: cleanUsername,
+              role,
+              school_id: targetSchoolId,
+            },
+          });
+        } else {
+          const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+            email: userEmail,
+            password: cleanPassword,
+            email_confirm: true,
+            user_metadata: {
+              full_name: cleanFullName,
+              username: cleanUsername,
+              role,
+              school_id: targetSchoolId,
+            },
+          });
+
+          if (authError) {
+            console.error('[Supabase Auth Error during createUser]:', authError.message);
+          } else if (authData?.user?.id) {
+            authUserId = authData.user.id;
+          }
         }
 
-        const validRoles = [
-          'super_admin',
-          'directeur',
-          'admin_scolaire',
-          'directeur_etudes',
-          'directeur_discipline',
-          'comptable',
-          'secretaire',
-          'surveillant',
-          'enseignant',
-          'parent',
-          'eleve',
-        ];
-        const role = validRoles.includes(accountData.role) ? accountData.role : 'enseignant';
-        const userEmail = accountData.email || `${accountData.username.toLowerCase().replace(/[^a-z0-9]/g, '')}@edukin.cd`;
-
-        // Create auth user with service role
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-          email: userEmail,
-          password: accountData.password || 'edukin123',
-          email_confirm: true,
-          user_metadata: {
-            full_name: accountData.fullName,
-            username: accountData.username,
-            role,
-            school_id: targetSchoolId,
-          },
-        });
-
-        if (!authError && authData?.user?.id) {
-          await supabase.from('profiles').upsert({
-            id: authData.user.id,
-            school_id: targetSchoolId === 'platform' ? null : targetSchoolId,
-            full_name: accountData.fullName,
-            phone: accountData.phone || null,
+        // Upsert into profiles table
+        if (authUserId) {
+          const profileSchoolId = targetSchoolId === 'platform' ? null : targetSchoolId;
+          const { error: profError } = await supabase.from('profiles').upsert({
+            id: authUserId,
+            school_id: profileSchoolId,
+            full_name: cleanFullName,
+            phone: accountData.phone?.trim() || null,
             role: role as any,
             active: true,
+            updated_at: new Date().toISOString(),
           });
+          if (profError) {
+            console.warn('[Supabase Profiles Error]:', profError.message);
+          }
         }
       } catch (err: any) {
-        console.warn('[Supabase] Profile sync skipped (local account created):', err?.message);
+        console.error('[Supabase createUserAccount failure]:', err?.message);
+      }
+    }
+
+    // 2. Also register in local DB
+    const newAccount = db.createUserAccount({
+      ...accountData,
+      id: authUserId || undefined,
+      schoolId: schoolId || 'platform',
+      email: userEmail,
+      username: cleanUsername,
+      fullName: cleanFullName,
+      password: cleanPassword,
+      role,
+    });
+
+    // 3. If role is enseignant, ensure teacher record is created
+    if (role === 'enseignant') {
+      try {
+        await this.createTeacher(schoolId, {
+          id: authUserId || undefined,
+          fullName: cleanFullName,
+          email: userEmail,
+          phone: accountData.phone?.trim() || '',
+          specialty: accountData.specialty || 'Enseignement Général',
+          active: true,
+        });
+      } catch (e) {
+        // Teacher record creation optional
       }
     }
 
@@ -1393,9 +1487,14 @@ export const dataService = {
         const { data: usersData, error: listError } = await supabase.auth.admin.listUsers();
         if (!listError && usersData?.users?.length) {
           const matchedUser = usersData.users.find((u) => {
-            const metaUser = (u.user_metadata?.username || '').toLowerCase();
-            const emailUser = (u.email || '').toLowerCase();
-            return metaUser === cleanId || emailUser === cleanId;
+            const metaUser = (u.user_metadata?.username || '').toLowerCase().trim();
+            const emailUser = (u.email || '').toLowerCase().trim();
+            return (
+              metaUser === cleanId ||
+              emailUser === cleanId ||
+              metaUser.replace(/[^a-z0-9]/g, '') === cleanId.replace(/[^a-z0-9]/g, '') ||
+              emailUser.split('@')[0] === cleanId.split('@')[0]
+            );
           });
 
           if (matchedUser && matchedUser.email) {
@@ -1427,6 +1526,7 @@ export const dataService = {
               // Cache into local runtime for fast subsequent requests
               try {
                 db.createUserAccount({
+                  id: u.id,
                   schoolId,
                   fullName: session.fullName,
                   username: session.username,

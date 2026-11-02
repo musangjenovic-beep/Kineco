@@ -2346,6 +2346,7 @@ class DatabaseManager {
   }
 
   createUserAccount(accountData: {
+    id?: string;
     schoolId: string;
     fullName: string;
     username: string;
@@ -2369,7 +2370,7 @@ class DatabaseManager {
     const defaultPass = accountData.password?.trim() || (accountData.role === 'eleve' ? 'eleve123' : 'edukin123');
 
     const newAcc: DbUserAccount = {
-      id: `usr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: accountData.id || `usr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       schoolId: accountData.schoolId,
       fullName: accountData.fullName.trim(),
       username: accountData.username.trim(),
