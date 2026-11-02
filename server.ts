@@ -4,7 +4,6 @@ dotenv.config({ override: true });
 import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
-import { createServer as createViteServer } from 'vite';
 import { db } from './server/db.ts';
 import { dataService, checkSupabaseConnection, seedSupabaseIfEmpty } from './server/supabase.ts';
 
@@ -12,18 +11,25 @@ export const app = express();
 
 app.use(express.json());
 
-// URL normalizer for Vercel Serverless Function rewrites
+// URL normalizer for Vercel Serverless Function rewrites & proxy routing
 app.use((req: Request, _res: Response, next: any) => {
-  if (
-    !req.url.startsWith('/api') &&
-    !req.url.startsWith('/@') &&
-    !req.url.startsWith('/src') &&
-    !req.url.startsWith('/dist') &&
-    !req.url.startsWith('/node_modules') &&
-    !req.url.startsWith('/index.html') &&
-    req.url !== '/'
-  ) {
-    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+  const matched =
+    (req.headers['x-matched-path'] as string) ||
+    (req.headers['x-vercel-matched-path'] as string) ||
+    (req.headers['x-forwarded-uri'] as string) ||
+    req.originalUrl ||
+    '';
+
+  const cleanMatched = matched.split('?')[0];
+
+  if (cleanMatched && cleanMatched.startsWith('/api')) {
+    req.url = cleanMatched;
+  } else if (req.url.startsWith('/api')) {
+    // Normal /api route
+  } else if (!req.url.startsWith('/@') && !req.url.startsWith('/src') && !req.url.startsWith('/dist') && !req.url.startsWith('/node_modules')) {
+    if (req.url !== '/') {
+      req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+    }
   }
   next();
 });
@@ -111,27 +117,35 @@ checkSupabaseConnection().then(async (status) => {
   // -------------------------------------------------------------
   // AUTHENTICATION & ACCESS CONTROL
   // -------------------------------------------------------------
-  app.post('/api/auth/login', (req: Request, res: Response) => {
-    const { identifier, password } = req.body;
-    if (!identifier || !password) {
-      return res.status(400).json({ error: 'Identifiant et mot de passe requis' });
-    }
+  app.post(['/api/auth/login', '/auth/login'], async (req: Request, res: Response) => {
+    try {
+      res.setHeader('Content-Type', 'application/json');
+      const { identifier, password } = req.body || {};
+      if (!identifier || !password) {
+        return res.status(400).json({ error: 'Identifiant et mot de passe requis' });
+      }
 
-    const authResult = db.authenticate(identifier, password);
-    if (!authResult) {
-      return res.status(401).json({
-        error: 'Identifiant ou mot de passe incorrect. Vérifiez vos accès ou contactez la direction de votre école.',
+      const authResult = await dataService.authenticateUser(identifier, password);
+      if (!authResult) {
+        return res.status(401).json({
+          error: 'Identifiant ou mot de passe incorrect. Vérifiez vos accès ou contactez la direction de votre école.',
+        });
+      }
+
+      return res.json(authResult);
+    } catch (err: any) {
+      console.error('[Auth Error]', err);
+      return res.status(500).json({
+        error: `Erreur interne lors de la connexion: ${err?.message || 'Vérifiez la connexion réseau'}`,
       });
     }
-
-    res.json(authResult);
   });
 
-  app.post('/api/auth/logout', (_req: Request, res: Response) => {
+  app.post(['/api/auth/logout', '/auth/logout'], (_req: Request, res: Response) => {
     res.json({ success: true, message: 'Déconnexion effectuée avec succès' });
   });
 
-  app.get('/api/auth/demo-accounts', (_req: Request, res: Response) => {
+  app.get(['/api/auth/demo-accounts', '/auth/demo-accounts'], (_req: Request, res: Response) => {
     res.json([
       {
         role: 'super_admin',
@@ -851,24 +865,48 @@ checkSupabaseConnection().then(async (status) => {
     }
   });
 
+  // Catch-all 404 for API endpoints
+  app.all(['/api', '/api/*'], (_req: Request, res: Response) => {
+    res.status(404).json({ error: 'Point de terminaison API introuvable' });
+  });
+
+  // Global JSON error handler to prevent 500 HTML crashes
+  app.use((err: any, _req: Request, res: Response, _next: any) => {
+    console.error('[Unhandled Express Error]:', err);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Erreur interne du serveur. Veuillez réessayer ou contacter la direction.',
+        details: err?.message || 'Erreur non spécifiée',
+      });
+    }
+  });
+
   // -------------------------------------------------------------
   // VITE MIDDLEWARE (Development) or STATIC ASSETS (Production)
   // -------------------------------------------------------------
 export async function startServer() {
   const PORT = Number(process.env.PORT) || 3000;
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (!process.env.VERCEL) {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req: Request, res: Response) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get('*', (_req: Request, res: Response) => {
+        const indexPath = path.join(distPath, 'index.html');
+        if (fs.existsSync(indexPath)) {
+          res.sendFile(indexPath);
+        } else {
+          res.status(404).send('Not Found');
+        }
+      });
+    }
   }
 
   app.listen(PORT, '0.0.0.0', () => {
@@ -878,7 +916,9 @@ export async function startServer() {
 
 // In local dev & standalone node run, start listening. On Vercel, serverless function exports app.
 if (!process.env.VERCEL) {
-  startServer();
+  startServer().catch((err) => {
+    console.error('Failed to start server:', err);
+  });
 }
 
 export default app;

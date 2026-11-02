@@ -248,8 +248,13 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
             );
           }
         } else {
+          const rawText = await response.text().catch(() => '');
           if (!response.ok) {
-            throw new Error(`Erreur du serveur d'authentification (${response.status})`);
+            throw new Error(
+              rawText && rawText.length < 150 && !rawText.includes('<html')
+                ? rawText
+                : `Erreur du serveur (${response.status}). Le serveur d'authentification est en cours de redémarrage ou les accès sont incorrects.`
+            );
           }
         }
       } catch (networkErr: any) {

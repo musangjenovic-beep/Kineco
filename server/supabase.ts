@@ -25,12 +25,19 @@ import {
   TeacherScheduleSlot,
   Teacher,
   UserAccount,
+  UserRole,
+  UserSession,
 } from '../src/types.ts';
 
 dotenv.config({ override: true });
 
-const supabaseUrl = process.env.SUPABASE_URL?.trim() || '';
-const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)?.trim() || '';
+const DEFAULT_SUPABASE_URL = 'https://euxxiidyvkwrnlxtwrsb.supabase.co';
+const DEFAULT_SUPABASE_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1eHhpaWR5dmt3cm5seHR3cnNiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5Mjg1MzM0NiwiZXhwIjoyMTA4NDI5MzQ2fQ.Xbsznv6j8gPb8PQjr0pPad1mTsrhAigjgciYjjJ3_QM';
+
+const supabaseUrl = process.env.SUPABASE_URL?.trim() || DEFAULT_SUPABASE_URL;
+const supabaseKey =
+  (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)?.trim() || DEFAULT_SUPABASE_KEY;
 
 let supabase: SupabaseClient | null = null;
 let isConnected = false;
@@ -1364,5 +1371,86 @@ export const dataService = {
     }
 
     return newAccount;
+  },
+
+  // 17. Authentification Persistante (Supabase + Local DB)
+  async authenticateUser(
+    identifier: string,
+    password: string
+  ): Promise<{ user: UserSession; token: string } | null> {
+    const cleanId = identifier.trim().toLowerCase();
+    const cleanPass = password.trim();
+
+    // 1. Try local memory DB first
+    const localResult = db.authenticate(identifier, password);
+    if (localResult) {
+      return localResult;
+    }
+
+    // 2. If not found in local memory, check Supabase Auth & Profiles
+    if (supabase) {
+      try {
+        const { data: usersData, error: listError } = await supabase.auth.admin.listUsers();
+        if (!listError && usersData?.users?.length) {
+          const matchedUser = usersData.users.find((u) => {
+            const metaUser = (u.user_metadata?.username || '').toLowerCase();
+            const emailUser = (u.email || '').toLowerCase();
+            return metaUser === cleanId || emailUser === cleanId;
+          });
+
+          if (matchedUser && matchedUser.email) {
+            // Verify password against Supabase Auth
+            const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+              email: matchedUser.email,
+              password: cleanPass,
+            });
+
+            if (!signInErr && signInData?.user) {
+              const u = signInData.user;
+              const meta = u.user_metadata || {};
+              const schoolId = meta.school_id || 'sch-bobokoli';
+              const sch = await this.getSchool(schoolId);
+              const role = (meta.role || 'enseignant') as UserRole;
+
+              const session: UserSession = {
+                id: u.id,
+                fullName: meta.full_name || u.email?.split('@')[0] || 'Utilisateur',
+                username: meta.username || u.email || cleanId,
+                email: u.email || '',
+                phone: u.phone || meta.phone || '',
+                role,
+                schoolId,
+                schoolName: sch?.name || 'Collège Bobokoli',
+                token: signInData.session?.access_token || `edukin_token_${u.id}_${Date.now()}`,
+              };
+
+              // Cache into local runtime for fast subsequent requests
+              try {
+                db.createUserAccount({
+                  schoolId,
+                  fullName: session.fullName,
+                  username: session.username,
+                  email: session.email,
+                  phone: session.phone,
+                  password: cleanPass,
+                  role,
+                });
+              } catch {
+                // Ignore if duplicate in memory
+              }
+
+              return {
+                user: session,
+                token: session.token || `edukin_token_${session.id}`,
+              };
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn('[Supabase Auth] Fallback check failed:', err?.message);
+      }
+    }
+
+    return null;
   },
 };
