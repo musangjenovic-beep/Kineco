@@ -23,6 +23,8 @@ import {
   ClassAppreciation,
   SchoolMessage,
   TeacherScheduleSlot,
+  Teacher,
+  UserAccount,
 } from '../src/types.ts';
 
 dotenv.config({ override: true });
@@ -1243,5 +1245,124 @@ export const dataService = {
       }
     }
     return db.getScheduleSlots(schoolId);
+  },
+
+  // 15. Enseignants (Teachers)
+  async getTeachers(schoolId: string): Promise<Teacher[]> {
+    return db.getTeachers(schoolId);
+  },
+
+  async createTeacher(schoolId: string, data: any): Promise<Teacher> {
+    return db.createTeacher(schoolId, data);
+  },
+
+  // 16. Comptes Utilisateurs (User Accounts)
+  async getUserAccounts(schoolId?: string): Promise<UserAccount[]> {
+    const local = db.getUserAccounts(schoolId);
+    if (supabase) {
+      try {
+        let q = supabase.from('profiles').select('*');
+        if (schoolId && schoolId !== 'platform') {
+          // Resolve school id
+          const { data: sch } = await supabase
+            .from('schools')
+            .select('id')
+            .or(`id.eq.${schoolId},code.eq.${schoolId}`)
+            .maybeSingle();
+          if (sch?.id) {
+            q = q.eq('school_id', sch.id);
+          }
+        }
+        const { data, error } = await q;
+        if (!error && data && data.length > 0) {
+          const localUsernames = new Set(local.map((u) => u.username.toLowerCase()));
+          for (const p of data) {
+            const suggested = (p.phone || p.full_name?.toLowerCase().replace(/\s+/g, '.')) || 'user';
+            if (!localUsernames.has(suggested.toLowerCase())) {
+              local.push({
+                id: p.id,
+                schoolId: p.school_id || schoolId || 'sch-bobokoli',
+                fullName: p.full_name,
+                username: suggested,
+                role: p.role,
+                phone: p.phone || '',
+                active: p.active ?? true,
+                createdAt: p.created_at || new Date().toISOString(),
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[Supabase] fallback to local for getUserAccounts:', e);
+      }
+    }
+    return local;
+  },
+
+  async createUserAccount(schoolId: string, accountData: any): Promise<UserAccount> {
+    // 1. Create in memory first
+    const newAccount = db.createUserAccount({
+      ...accountData,
+      schoolId: schoolId || 'platform',
+    });
+
+    // 2. Safely sync to Supabase auth / profiles if service role is available
+    if (supabase) {
+      try {
+        let targetSchoolId = schoolId;
+        const { data: sch } = await supabase
+          .from('schools')
+          .select('id')
+          .or(`id.eq.${schoolId},code.eq.${schoolId}`)
+          .maybeSingle();
+        if (sch?.id) {
+          targetSchoolId = sch.id;
+        }
+
+        const validRoles = [
+          'super_admin',
+          'directeur',
+          'admin_scolaire',
+          'directeur_etudes',
+          'directeur_discipline',
+          'comptable',
+          'secretaire',
+          'surveillant',
+          'enseignant',
+          'parent',
+          'eleve',
+        ];
+        const role = validRoles.includes(accountData.role) ? accountData.role : 'enseignant';
+        const userEmail = accountData.email || `${accountData.username.toLowerCase().replace(/[^a-z0-9]/g, '')}@edukin.cd`;
+
+        // Create auth user with service role
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+          email: userEmail,
+          password: accountData.password || 'edukin123',
+          email_confirm: true,
+          user_metadata: {
+            full_name: accountData.fullName,
+            username: accountData.username,
+            role,
+            school_id: targetSchoolId,
+          },
+        });
+
+        if (!authError && authData?.user?.id) {
+          await supabase.from('profiles').upsert({
+            id: authData.user.id,
+            school_id: targetSchoolId === 'platform' ? null : targetSchoolId,
+            full_name: accountData.fullName,
+            phone: accountData.phone || null,
+            role: role as any,
+            active: true,
+          });
+        }
+      } catch (err: any) {
+        console.warn('[Supabase] Profile sync skipped (local account created):', err?.message);
+      }
+    }
+
+    return newAccount;
   },
 };

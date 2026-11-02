@@ -111,70 +111,44 @@ export const authenticateLocally = (identifier: string, password: string): UserS
   const cleanId = identifier.trim().toLowerCase();
   const cleanPass = password.trim();
 
-  // Match against demo accounts
-  const match = DEFAULT_DEMO_ACCOUNTS.find(
-    (acc) =>
+  if (!cleanId || !cleanPass) return null;
+
+  // STRICT check against demo accounts: both identifier (or email) AND exact password must match
+  const match = DEFAULT_DEMO_ACCOUNTS.find((acc) => {
+    const idMatch =
       acc.identifier.toLowerCase() === cleanId ||
-      (acc.identifier.includes('@') && cleanId.includes(acc.identifier.split('@')[0]))
-  );
+      (acc.identifier.includes('@') && cleanId === acc.identifier.toLowerCase());
+    return idMatch && acc.defaultPassword === cleanPass;
+  });
 
-  if (match) {
-    let studentId = undefined;
-    let parentStudentIds = undefined;
-    if (match.role === 'eleve') {
-      studentId = match.identifier === 'BOB-2026-0041' ? 'stu-0041' : 'stu-0042';
-    } else if (match.role === 'parent') {
-      parentStudentIds = ['stu-0041', 'stu-0042'];
-    }
-
-    return {
-      id: `usr-${match.role}-${Date.now()}`,
-      fullName: match.label.split('(')[1]?.replace(')', '') || match.label,
-      username: match.identifier,
-      email: match.identifier.includes('@') ? match.identifier : `${match.identifier.toLowerCase()}@masomo.cd`,
-      phone: '+243 81 500 1234',
-      role: match.role,
-      schoolId: 'd8cd16f2-bafc-4425-b96c-c988773cfefb',
-      schoolName: match.schoolName || 'Collège Bobokoli',
-      studentId,
-      parentStudentIds,
-      activeStudentId: studentId || parentStudentIds?.[0],
-      teacherId: match.role === 'enseignant' ? 'tch-kalambayi' : undefined,
-      token: `masomo_token_demo_${Date.now()}`,
-    };
+  if (!match) {
+    // Absolutely NO fake or unregistered account login allowed
+    return null;
   }
 
-  // Allow custom test login if user enters any identifier with 3+ chars
-  if (cleanPass.length >= 3 && cleanId.length >= 3) {
-    const isTeacher = cleanId.includes('prof') || cleanId.includes('enseignant');
-    const isEleve = cleanId.includes('bob-') || cleanId.includes('eleve');
-    const isParent = cleanId.includes('parent') || cleanId.includes('musang');
-    const isDirector = cleanId.includes('dir');
-    const role: UserRole = isTeacher
-      ? 'enseignant'
-      : isEleve
-      ? 'eleve'
-      : isParent
-      ? 'parent'
-      : isDirector
-      ? 'directeur'
-      : 'enseignant';
-
-    return {
-      id: `usr-custom-${Date.now()}`,
-      fullName: identifier.split('@')[0].toUpperCase(),
-      username: identifier,
-      email: identifier.includes('@') ? identifier : `${identifier}@masomo.cd`,
-      phone: '+243 81 500 1234',
-      role,
-      schoolId: 'd8cd16f2-bafc-4425-b96c-c988773cfefb',
-      schoolName: 'Collège Bobokoli',
-      teacherId: role === 'enseignant' ? 'tch-kalambayi' : undefined,
-      token: `masomo_token_custom_${Date.now()}`,
-    };
+  let studentId = undefined;
+  let parentStudentIds = undefined;
+  if (match.role === 'eleve') {
+    studentId = match.identifier === 'BOB-2026-0041' ? 'stu-0041' : 'stu-0042';
+  } else if (match.role === 'parent') {
+    parentStudentIds = ['stu-0041', 'stu-0042'];
   }
 
-  return null;
+  return {
+    id: `usr-${match.role}-${Date.now()}`,
+    fullName: match.label.split('(')[1]?.replace(')', '') || match.label,
+    username: match.identifier,
+    email: match.identifier.includes('@') ? match.identifier : `${match.identifier.toLowerCase()}@masomo.cd`,
+    phone: '+243 81 500 1234',
+    role: match.role,
+    schoolId: 'd8cd16f2-bafc-4425-b96c-c988773cfefb',
+    schoolName: match.schoolName || 'Collège Bobokoli',
+    studentId,
+    parentStudentIds,
+    activeStudentId: studentId || parentStudentIds?.[0],
+    teacherId: match.role === 'enseignant' ? 'tch-kalambayi' : undefined,
+    token: `masomo_token_demo_${Date.now()}`,
+  };
 };
 
 interface LoginPageProps {
@@ -182,8 +156,8 @@ interface LoginPageProps {
 }
 
 export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
-  // Mode: 'signup' (matching the screenshot exactly) or 'signin'
-  const [mode, setMode] = useState<'signup' | 'signin'>('signup');
+  // Mode: default to 'signin' for standard portal login
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
 
   // Form fields
   const [email, setEmail] = useState('');
@@ -223,12 +197,10 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const loginId = mode === 'signup' 
-      ? (email.trim() || username.trim()) 
-      : (username.trim() || email.trim());
+    const loginId = username.trim() || email.trim();
 
     if (!loginId) {
-      setErrorMessage(mode === 'signup' ? 'Veuillez renseigner votre email ou identifiant' : 'Veuillez saisir votre identifiant');
+      setErrorMessage('Veuillez saisir votre identifiant ou adresse e-mail');
       return;
     }
 
@@ -237,8 +209,14 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
       return;
     }
 
-    if (mode === 'signup' && confirmPassword && password !== confirmPassword) {
-      setErrorMessage('Les deux mots de passe ne correspondent pas');
+    if (mode === 'signup') {
+      if (confirmPassword && password !== confirmPassword) {
+        setErrorMessage('Les deux mots de passe ne correspondent pas');
+        return;
+      }
+      setErrorMessage(
+        "Dans le système scolaire RDC, les comptes sont créés et délivrés par la Direction de l'école (pas d'auto-inscription publique). Veuillez vous connecter avec vos identifiants ou tester un rôle via 'Comptes de test'."
+      );
       return;
     }
 
@@ -262,37 +240,44 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
           const data = await response.json();
           if (response.ok && data?.user) {
             loggedInUser = data.user;
-          } else if (!response.ok && data?.error) {
-            // Check if client fallback matches
-            const fallback = authenticateLocally(loginId, password.trim());
-            if (fallback) {
-              loggedInUser = fallback;
-            } else {
-              throw new Error(data.error || 'Identifiant ou mot de passe incorrect.');
-            }
+          } else {
+            // Server explicitly rejected the account: wrong password, inactive or non-existent
+            throw new Error(
+              data?.error ||
+                'Identifiant ou mot de passe incorrect. Seuls les comptes enregistrés par la direction peuvent se connecter.'
+            );
+          }
+        } else {
+          if (!response.ok) {
+            throw new Error(`Erreur du serveur d'authentification (${response.status})`);
           }
         }
       } catch (networkErr: any) {
-        // If it was a real bad credential error from JSON API, rethrow
-        if (networkErr.message && !networkErr.message.includes('JSON') && !networkErr.message.includes('fetch')) {
+        // If it's a real authentication rejection error thrown above, re-throw immediately
+        if (
+          networkErr.message &&
+          !networkErr.message.includes('Failed to fetch') &&
+          !networkErr.message.includes('NetworkError') &&
+          !networkErr.message.includes('Load failed')
+        ) {
           throw networkErr;
         }
-        console.warn('API endpoint unreachable or returned non-JSON, using local authentication:', networkErr);
-      }
 
-      // If backend was not reached or returned 404 (e.g. static hosting on Vercel)
-      if (!loggedInUser) {
+        // Only fallback to local strict demo accounts if backend is truly unreachable offline
+        console.warn('Backend non joignable, vérification des comptes démo hors-ligne:', networkErr);
         loggedInUser = authenticateLocally(loginId, password.trim());
       }
 
       if (!loggedInUser) {
-        throw new Error('Identifiant ou mot de passe incorrect. Cliquez sur "Comptes Démo" pour tester un compte prêt à l\'emploi.');
+        throw new Error(
+          'Identifiant ou mot de passe incorrect. Vérifiez vos accès auprès de la direction de votre école.'
+        );
       }
 
       localStorage.setItem('edukin_session', JSON.stringify(loggedInUser));
       onLoginSuccess(loggedInUser);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Erreur lors de la connexion.');
+      setErrorMessage(err.message || 'Identifiant ou mot de passe incorrect.');
     } finally {
       setIsLoading(false);
     }
@@ -389,7 +374,7 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
               Plateforme Numérique Scolaire RDC
             </p>
             <p className="text-xs text-slate-500 mt-1">
-              {mode === 'signup' ? 'Créer votre compte enseignant ou élève' : 'Accédez à votre espace scolaire'}
+              {mode === 'signup' ? 'Création de compte scolaire RDC' : 'Accédez à votre espace sécurisé (Prof, Direction, Élève, Parent)'}
             </p>
           </div>
 
@@ -408,23 +393,28 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
             </div>
           )}
 
+          {/* Notice when in signup mode */}
+          {mode === 'signup' && (
+            <div className="p-3.5 rounded-xl bg-blue-50 text-blue-900 text-xs border border-blue-100 leading-relaxed space-y-2">
+              <p className="font-semibold text-blue-950">
+                Notice d'attribution des comptes :
+              </p>
+              <p className="text-[11px] text-blue-800">
+                Dans le système scolaire RDC, les accès sont nominatifs et strictement délivrés par la Direction de l'établissement (matricule pour les élèves, accès pour les enseignants et parents).
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsDemoModalOpen(true)}
+                className="text-xs text-blue-700 font-bold underline hover:text-blue-900 block"
+              >
+                → Choisir un compte de démonstration configuré
+              </button>
+            </div>
+          )}
+
           {/* Clean Input Form */}
           <form onSubmit={handleFormSubmit} className="space-y-3.5 pt-1">
-            {/* Field 1: E-mail */}
-            <div className="relative flex items-center bg-[#f0f2ef] rounded-2xl px-4 py-3.5 transition-colors focus-within:bg-[#e9ede8] focus-within:ring-1 focus-within:ring-[#5f7a63]">
-              <Mail className="w-5 h-5 text-stone-600 shrink-0 mr-3" />
-              <input
-                id="input-login-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="E-mail"
-                className="w-full bg-transparent text-sm text-stone-900 placeholder-stone-500 focus:outline-none font-normal"
-                required={mode === 'signup'}
-              />
-            </div>
-
-            {/* Field 2: Username / Matricule */}
+            {/* Field 1: Username / Matricule / E-mail */}
             <div className="relative flex items-center bg-[#f0f2ef] rounded-2xl px-4 py-3.5 transition-colors focus-within:bg-[#e9ede8] focus-within:ring-1 focus-within:ring-[#5f7a63]">
               <User className="w-5 h-5 text-stone-600 shrink-0 mr-3" />
               <input
@@ -432,13 +422,13 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder={mode === 'signup' ? "Username" : "Username ou Matricule élève"}
+                placeholder="Identifiant, E-mail ou Matricule élève"
                 className="w-full bg-transparent text-sm text-stone-900 placeholder-stone-500 focus:outline-none font-normal"
-                required={mode === 'signin'}
+                required
               />
             </div>
 
-            {/* Field 3: Password */}
+            {/* Field 2: Password */}
             <div className="relative flex items-center bg-[#f0f2ef] rounded-2xl px-4 py-3.5 transition-colors focus-within:bg-[#e9ede8] focus-within:ring-1 focus-within:ring-[#5f7a63]">
               <Lock className="w-5 h-5 text-stone-600 shrink-0 mr-3" />
               <input
@@ -446,7 +436,7 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
+                placeholder="Mot de passe"
                 required
                 className="w-full bg-transparent text-sm text-stone-900 placeholder-stone-500 focus:outline-none font-normal"
               />
@@ -459,7 +449,7 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
               </button>
             </div>
 
-            {/* Field 4: Confirm password (visible in Sign up mode as in screenshot) */}
+            {/* Field 3: Confirm password (only if signup mode) */}
             {mode === 'signup' && (
               <div className="relative flex items-center bg-[#f0f2ef] rounded-2xl px-4 py-3.5 transition-colors focus-within:bg-[#e9ede8] focus-within:ring-1 focus-within:ring-[#5f7a63]">
                 <Lock className="w-5 h-5 text-stone-600 shrink-0 mr-3" />
@@ -468,13 +458,13 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
                   type={showPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm password"
+                  placeholder="Confirmer le mot de passe"
                   className="w-full bg-transparent text-sm text-stone-900 placeholder-stone-500 focus:outline-none font-normal"
                 />
               </div>
             )}
 
-            {/* Sage Green Submit Button */}
+            {/* Submit Button */}
             <button
               id="btn-auth-submit"
               type="submit"
@@ -484,7 +474,7 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
               {isLoading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                <span>{mode === 'signup' ? 'Sign up' : 'Sign in'}</span>
+                <span>{mode === 'signup' ? 'Valider l’accès' : 'Se connecter'}</span>
               )}
             </button>
           </form>
@@ -547,10 +537,11 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
           </div>
 
           {/* Bottom Switcher: "Already have an account? Sign in" */}
+          {/* Bottom Switcher */}
           <div className="text-center pt-2 pb-4">
             {mode === 'signup' ? (
               <p className="text-sm text-stone-700">
-                Already have an account?{' '}
+                Vous avez déjà vos identifiants ?{' '}
                 <button
                   type="button"
                   onClick={() => {
@@ -559,21 +550,21 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
                   }}
                   className="font-medium text-stone-900 underline hover:text-[#5f7a63] transition-colors"
                 >
-                  Sign in
+                  Se connecter
                 </button>
               </p>
             ) : (
               <p className="text-sm text-stone-700">
-                Don't have an account?{' '}
+                Vous découvrez la plateforme ?{' '}
                 <button
                   type="button"
                   onClick={() => {
-                    setMode('signup');
+                    setIsDemoModalOpen(true);
                     setErrorMessage(null);
                   }}
-                  className="font-medium text-stone-900 underline hover:text-[#5f7a63] transition-colors"
+                  className="font-medium text-blue-700 underline hover:text-blue-900 transition-colors"
                 >
-                  Sign up
+                  Tester avec un compte démo
                 </button>
               </p>
             )}

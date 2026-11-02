@@ -1234,9 +1234,21 @@ export const DirecteurDashboard = ({
 
                   {/* Professeur assigné */}
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Professeur en charge du cours *
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        Professeur en charge du cours *
+                      </label>
+                      {onOpenUserManagement && (
+                        <button
+                          type="button"
+                          onClick={onOpenUserManagement}
+                          className="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold hover:underline flex items-center gap-1"
+                          title="Créer un compte pour un nouvel enseignant"
+                        >
+                          + Créer un compte prof
+                        </button>
+                      )}
+                    </div>
                     <select
                       required
                       value={courseTeacherIdInput}

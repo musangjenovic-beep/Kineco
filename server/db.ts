@@ -1714,20 +1714,49 @@ class DatabaseManager {
   }
 
   private matchesSchool(recordSchoolId: string, querySchoolId: string): boolean {
+    if (!recordSchoolId || !querySchoolId) return false;
     if (recordSchoolId === querySchoolId) return true;
-    if (
-      (querySchoolId === 'd8cd16f2-bafc-4425-b96c-c988773cfefb' || querySchoolId === 'sch-bobokoli') &&
-      (recordSchoolId === 'sch-bobokoli' || recordSchoolId === 'd8cd16f2-bafc-4425-b96c-c988773cfefb')
-    ) {
-      return true;
-    }
-    if (
-      (querySchoolId === '2a189e9f-cc31-47f2-8f16-67391dfb64e6' || querySchoolId === 'sch-shaumba') &&
-      (recordSchoolId === 'sch-shaumba' || recordSchoolId === '2a189e9f-cc31-47f2-8f16-67391dfb64e6')
-    ) {
-      return true;
-    }
+
+    // Check if both relate to Collège Bobokoli (by ID, code, or known Supabase UUIDs)
+    const isBobokoli = (id: string) =>
+      id === 'sch-bobokoli' ||
+      id === 'BOB-KIN' ||
+      id === 'ed8bdc39-2b57-486b-ad31-7ee5f17444cc' ||
+      id === 'd8cd16f2-bafc-4425-b96c-c988773cfefb';
+    if (isBobokoli(recordSchoolId) && isBobokoli(querySchoolId)) return true;
+
+    // Check if both relate to Lycée Shaumba (by ID, code, or known Supabase UUIDs)
+    const isShaumba = (id: string) =>
+      id === 'sch-shaumba' ||
+      id === 'SHM-GOM' ||
+      id === '3015a20a-5654-4395-a12f-a2527fca9386' ||
+      id === '2a189e9f-cc31-47f2-8f16-67391dfb64e6';
+    if (isShaumba(recordSchoolId) && isShaumba(querySchoolId)) return true;
+
+    // Also match dynamically by school list
+    const s1 = this.schools.find((s) => s.id === recordSchoolId || s.code === recordSchoolId);
+    const s2 = this.schools.find((s) => s.id === querySchoolId || s.code === querySchoolId);
+    if (s1 && s2 && (s1.id === s2.id || s1.code === s2.code)) return true;
+
     return false;
+  }
+
+  createTeacher(schoolId: string, teacherData: { fullName: string; email?: string; phone?: string; specialty?: string }): Teacher {
+    const clean = teacherData.fullName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const rand = Math.floor(100 + Math.random() * 900);
+    const newTeacher: Teacher = {
+      id: `tch-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      schoolId,
+      matricule: `ENS-${new Date().getFullYear()}-${rand}`,
+      fullName: teacherData.fullName.trim(),
+      email: teacherData.email?.trim() || `${clean}@ecole.cd`,
+      phone: teacherData.phone?.trim() || '+243 81 000 0000',
+      specialty: teacherData.specialty || 'Enseignement Général',
+      assignedClasses: [],
+    };
+    this.teachers.push(newTeacher);
+    this.logAction(schoolId, 'Directeur', 'directeur', 'CREATION_ENSEIGNANT', `Création de l'enseignant ${newTeacher.fullName}`);
+    return newTeacher;
   }
 
   // Parents
@@ -2355,6 +2384,30 @@ class DatabaseManager {
       parentId: accountData.parentId,
       createdBy: accountData.createdBy,
     };
+
+    // If role is enseignant, automatically create or link teacher record so they appear in assignments
+    if (accountData.role === 'enseignant' && !newAcc.teacherId) {
+      const newTeacher = this.createTeacher(accountData.schoolId, {
+        fullName: accountData.fullName,
+        email: accountData.email || accountData.username,
+        phone: accountData.phone,
+        specialty: 'Enseignement Général',
+      });
+      newAcc.teacherId = newTeacher.id;
+    }
+
+    // If role is parent, automatically create parent record
+    if (accountData.role === 'parent' && !newAcc.parentId) {
+      const newParent = this.createParent(accountData.schoolId, {
+        fullName: accountData.fullName,
+        phone: accountData.phone || '',
+        email: accountData.email || accountData.username,
+        address: 'Kinshasa, RDC',
+        occupation: 'Parent d’élève',
+        studentIds: accountData.studentId ? [accountData.studentId] : [],
+      });
+      newAcc.parentId = newParent.id;
+    }
 
     this.userAccounts.unshift(newAcc);
 

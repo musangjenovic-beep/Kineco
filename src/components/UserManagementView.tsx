@@ -28,6 +28,7 @@ interface UserManagementViewProps {
   currentUserRole: UserRole;
   currentUserId?: string;
   onClose?: () => void;
+  onUserCreated?: (newAccount: UserAccount) => void;
 }
 
 export const UserManagementView = ({
@@ -35,12 +36,15 @@ export const UserManagementView = ({
   currentUserRole,
   currentUserId,
   onClose,
+  onUserCreated,
 }: UserManagementViewProps) => {
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [resetModalUser, setResetModalUser] = useState<UserAccount | null>(null);
+  const [newPasswordInput, setNewPasswordInput] = useState('edukin123');
   const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -59,11 +63,14 @@ export const UserManagementView = ({
     try {
       const url = currentUserRole === 'super_admin' 
         ? '/api/users' 
-        : `/api/users?schoolId=${currentSchool.id}`;
+        : `/api/users?schoolId=${encodeURIComponent(currentSchool.id)}`;
       const res = await fetch(url);
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setUsers(data);
+      const contentType = res.headers.get('content-type');
+      if (res.ok && contentType && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setUsers(data);
+        }
       }
     } catch (err) {
       console.error('Failed to load user accounts:', err);
@@ -130,9 +137,23 @@ export const UserManagementView = ({
         }),
       });
 
-      const data = await res.json();
+      let data: any = null;
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error(
+            text.includes('server')
+              ? 'Le serveur a rencontré un problème temporaire. Veuillez réessayer.'
+              : `Erreur du serveur (${res.status})`
+          );
+        }
+      }
+
       if (!res.ok) {
-        throw new Error(data.error || 'Erreur lors de la création du compte');
+        throw new Error(data?.error || `Erreur (${res.status}) lors de la création du compte`);
       }
 
       setNotification({
@@ -147,6 +168,10 @@ export const UserManagementView = ({
       setPhone('+243 ');
       setPassword('edukin123');
       setIsCreateModalOpen(false);
+
+      if (onUserCreated) {
+        onUserCreated(data);
+      }
 
       // Refresh list
       loadUsers();
@@ -183,25 +208,37 @@ export const UserManagementView = ({
     }
   };
 
-  const handleResetPassword = async (user: UserAccount) => {
-    const newPass = prompt(`Saisissez le nouveau mot de passe pour ${user.fullName}:`, user.role === 'eleve' ? 'eleve123' : 'edukin123');
-    if (!newPass) return;
+  const handleOpenResetModal = (user: UserAccount) => {
+    setResetModalUser(user);
+    setNewPasswordInput(user.role === 'eleve' ? 'eleve123' : 'edukin123');
+  };
+
+  const submitPasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetModalUser || !newPasswordInput.trim()) return;
 
     try {
-      const res = await fetch(`/api/users/${user.id}/reset-password`, {
+      const res = await fetch(`/api/users/${resetModalUser.id}/reset-password`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newPassword: newPass }),
+        body: JSON.stringify({ newPassword: newPasswordInput.trim() }),
       });
 
       if (res.ok) {
         setNotification({
           type: 'success',
-          message: `Mot de passe réinitialisé avec succès pour ${user.fullName} (${user.username}).`,
+          message: `Mot de passe réinitialisé avec succès pour ${resetModalUser.fullName} (${resetModalUser.username}).`,
         });
+        setResetModalUser(null);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Erreur lors de la réinitialisation');
       }
-    } catch (err) {
-      console.error('Failed to reset password:', err);
+    } catch (err: any) {
+      setNotification({
+        type: 'error',
+        message: err.message || 'Échec de la réinitialisation du mot de passe.',
+      });
     }
   };
 
@@ -490,7 +527,7 @@ export const UserManagementView = ({
                     {/* Action buttons */}
                     <div className="pt-2 flex items-center gap-2 w-full">
                       <button
-                        onClick={() => handleResetPassword(u)}
+                        onClick={() => handleOpenResetModal(u)}
                         className="flex-1 py-1.5 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] transition-colors text-center"
                       >
                         Changer Code
@@ -581,7 +618,7 @@ export const UserManagementView = ({
 
                         <td className="py-3.5 px-4 text-right space-x-1.5">
                           <button
-                            onClick={() => handleResetPassword(u)}
+                            onClick={() => handleOpenResetModal(u)}
                             className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-[11px] transition-colors"
                             title="Réinitialiser le mot de passe"
                           >
@@ -765,6 +802,58 @@ export const UserManagementView = ({
                   className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm transition-colors disabled:opacity-50"
                 >
                   {isSubmitting ? 'Création en cours...' : 'Créer le Compte'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Réinitialiser le mot de passe */}
+      {resetModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-200 text-slate-900">
+            <div className="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-amber-400" />
+                <h3 className="font-bold text-xs">Modifier le mot de passe</h3>
+              </div>
+              <button
+                onClick={() => setResetModalUser(null)}
+                className="p-1 rounded text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={submitPasswordReset} className="p-5 space-y-3.5 text-xs">
+              <div>
+                <p className="text-slate-600 text-[11px] mb-2">
+                  Définir un nouveau mot de passe pour <strong>{resetModalUser.fullName}</strong> ({resetModalUser.username}) :
+                </p>
+                <input
+                  type="text"
+                  required
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  className="w-full font-mono text-xs px-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
+                  placeholder="Nouveau mot de passe"
+                />
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setResetModalUser(null)}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold transition-colors"
+                >
+                  Enregistrer
                 </button>
               </div>
             </form>

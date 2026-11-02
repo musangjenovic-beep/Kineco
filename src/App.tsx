@@ -735,6 +735,21 @@ export default function App() {
                 currentUserRole={currentRole}
                 currentUserId={currentUser?.id}
                 onClose={() => setIsUserManagementOpen(false)}
+                onUserCreated={(newAccount) => {
+                  if (newAccount.role === 'enseignant') {
+                    safeFetchJson(`/api/teachers?schoolId=${currentSchool.id}`).then((tchs) => {
+                      if (Array.isArray(tchs) && tchs.length > 0) setTeachers(tchs);
+                    });
+                  } else if (newAccount.role === 'parent') {
+                    safeFetchJson(`/api/parents?schoolId=${currentSchool.id}`).then((pts) => {
+                      if (Array.isArray(pts) && pts.length > 0) setParents(pts);
+                    });
+                  } else if (newAccount.role === 'eleve') {
+                    safeFetchJson(`/api/students?schoolId=${currentSchool.id}`).then((studs) => {
+                      if (Array.isArray(studs) && studs.length > 0) setStudents(studs);
+                    });
+                  }
+                }}
               />
             ) : activeNavTab === 'profil' || (currentRole === 'enseignant' && teacherActiveTab === 'profil') ? (
               <TeacherProfileView

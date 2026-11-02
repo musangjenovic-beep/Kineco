@@ -227,26 +227,33 @@ checkSupabaseConnection().then(async (status) => {
   // -------------------------------------------------------------
   // USER ACCOUNTS & PROVISIONING (ROLE HIERARCHY)
   // -------------------------------------------------------------
-  app.get('/api/users', (req: Request, res: Response) => {
-    const schoolId = req.query.schoolId as string | undefined;
-    const users = db.getUserAccounts(schoolId);
-    res.json(users);
+  app.get('/api/users', async (req: Request, res: Response) => {
+    try {
+      res.setHeader('Content-Type', 'application/json');
+      const schoolId = req.query.schoolId as string | undefined;
+      const users = await dataService.getUserAccounts(schoolId);
+      res.json(users);
+    } catch (err: any) {
+      console.error('[API Users GET] Error:', err);
+      res.status(500).json({ error: err.message || 'Erreur lors du chargement des utilisateurs' });
+    }
   });
 
-  app.post('/api/users', (req: Request, res: Response) => {
+  app.post('/api/users', async (req: Request, res: Response) => {
     try {
+      res.setHeader('Content-Type', 'application/json');
       const { schoolId, fullName, username, email, phone, password, role, studentId, teacherId, parentId, createdBy } = req.body;
       if (!fullName || !username || !role) {
         return res.status(400).json({ error: 'Nom complet, identifiant de connexion et rôle sont obligatoires' });
       }
 
-      const newAccount = db.createUserAccount({
+      const newAccount = await dataService.createUserAccount(schoolId || 'platform', {
         schoolId: schoolId || 'platform',
-        fullName,
-        username,
-        email,
-        phone,
-        password,
+        fullName: fullName.trim(),
+        username: username.trim(),
+        email: email?.trim() || undefined,
+        phone: phone?.trim() || undefined,
+        password: password?.trim() || 'edukin123',
         role,
         studentId,
         teacherId,
@@ -256,7 +263,8 @@ checkSupabaseConnection().then(async (status) => {
 
       res.status(201).json(newAccount);
     } catch (err: any) {
-      res.status(400).json({ error: err.message });
+      console.error('[API Users POST] Error:', err);
+      res.status(400).json({ error: err.message || 'Erreur lors de la création du compte' });
     }
   });
 
@@ -455,9 +463,26 @@ checkSupabaseConnection().then(async (status) => {
     res.status(201).json(parent);
   });
 
-  app.get('/api/teachers', (req: Request, res: Response) => {
+  app.get('/api/teachers', async (req: Request, res: Response) => {
     const schoolId = (req.query.schoolId as string) || 'sch-bobokoli';
-    res.json(db.getTeachers(schoolId));
+    const teachers = await dataService.getTeachers(schoolId);
+    res.json(teachers);
+  });
+
+  app.post('/api/teachers', async (req: Request, res: Response) => {
+    try {
+      const { schoolId, fullName, email, phone, specialty } = req.body;
+      if (!fullName) return res.status(400).json({ error: 'Le nom complet est obligatoire' });
+      const teacher = await dataService.createTeacher(schoolId || 'sch-bobokoli', {
+        fullName,
+        email,
+        phone,
+        specialty,
+      });
+      res.status(201).json(teacher);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Erreur lors de la création du professeur' });
+    }
   });
 
   app.put('/api/teachers/:id', (req: Request, res: Response) => {
