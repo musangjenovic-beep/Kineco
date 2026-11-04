@@ -1,0 +1,71 @@
+﻿Spécifications Fonctionnelles et Architecture de la Plateforme Scolaire
+Ce document présente l'analyse détaillée, les spécifications fonctionnelles et la structuration des rôles et des modules pour la plateforme de gestion scolaire.
+
+
+________________
+
+
+1. Gestion Globale par l'Entreprise (Super Administrateur & Cadres)
+La gestion de la plateforme est centralisée et structurée autour d'une équipe dédiée au sein de l'entreprise :
+
+
+* Super Administrateur Principal : Dispose des pleins pouvoirs sur l'ensemble de l'écosystème, la supervision des abonnements et la configuration globale.
+* Cadres Spécialisés : Les tâches sont réparties entre différents départements :
+   * Sécurité & Conformité : Gestion des accès, surveillance des journaux d'activité (logs) et protection des données.
+   * Finances & Facturation : Suivi des abonnements, des paiements des établissements et de la comptabilité de la plateforme.
+   * Support & Intégration : Création manuelle d'établissements si une école rencontre des difficultés d'inscription, après réception des documents légaux nécessaires.
+
+
+________________
+
+
+2. Gestion des Abonnements et Plans
+* Niveaux d'Abonnement : Distinction claire entre les comptes Basiques et les comptes Premiums, avec des fonctionnalités avancées réservées à ces derniers (rapports approfondis, stockage accru, modules spécifiques).
+* Suspension Temporaire : En cas de non-paiement de l'abonnement par un établissement, la plateforme applique un blocage temporaire des accès jusqu'à régularisation de la situation financière.
+* Paiements Mobiles & Traçabilité : Les paiements par Mobile Money transitent par l'entreprise, qui se charge de notifier l'établissement instantanément et d'assurer le suivi comptable transparent.
+
+
+________________
+
+
+3. Authentification et Sécurité
+* Connexion via Google : Chaque utilisateur (propriétaire, administrateur, enseignant) peut lier son compte Google dans son profil pour se connecter rapidement en un clic.
+* Récupération de Mot de Passe : Procédure sécurisée de réinitialisation par e-mail en cas d'oubli des identifiants.
+* Gestion des Profils : Les modifications de profil (nom, numéro, photo) sont soumises à une règle de sécurité imposant un délai de 2 semaines entre deux modifications consécutives.
+
+
+________________
+
+
+4. Organisation Interne des Établissements et Rôles
+* Structure Pédagogique : Chaque école configure ses propres sections (ex. : Scientifique, Littéraire, Électricité) et ses classes (ex. : 4ème année).
+* Rôles et Permissions au sein de l'École :
+   * Direction des Études : Conception de l'horaire général des cours et supervision de la grille horaire (gestion flexible de 6 à 8 heures de cours par jour selon les options).
+   * Secrétariat : Gestion des inscriptions détaillées des élèves (informations personnelles, antécédents scolaires).
+   * Directeur de Discipline : Saisie des infractions par classe et par option. Les infractions mineures ("autres infractions") disposent d'une horodatation immuable (date et heure figées pour garantir la traçabilité).
+   * Comptabilité de l'École : Gestion des frais scolaires par classe, suivi des échéances, calcul des jours restants avant l'échéance (affichage d'alertes visuelles en rouge pour les retards) et validation des paiements physiques ou mobiles.
+
+
+________________
+
+
+5. Gestion des Élèves et Transferts Inter-établissements
+* Dossier Complet et Palmarès : L'inscription d'un élève requiert toutes ses informations d'état civil et son parcours académique antérieur.
+* Transfert Sécurisé : Possibilité de transférer un élève d'un établissement enregistré sur la plateforme vers un autre. Le transfert inclut l'intégralité du dossier, des notes et des points cumulés (sous réserve d'acceptation par l'école d'accueil), préservant ainsi son palmarès global.
+
+
+________________
+
+
+6. Espace Enseignants et Notes
+* Attribution des Cours : Les cours sont créés et centralisés par l'établissement avant d'être attribués aux professeurs. Un professeur peut dispenser plusieurs cours, mais un cours spécifique ne peut être assigné qu'à un seul enseignant principal.
+* Saisie des Notes et Évaluations : Les enseignants enregistrent les côtes des interrogations et examens au fur et à mesure. La plateforme effectue automatiquement les pondérations nécessaires pour s'aligner sur les barèmes officiels (ex. : ramener à 20 points).
+* Appel Journalier : Le professeur effectue l'appel en classe, générant une notification immédiate pour la direction. Une fois la journée passée, les modifications de l'appel sont verrouillées pour éviter toute altération.
+* Conformité des Bulletins (RDC) : Génération de bulletins adaptés au système éducatif de la République Démocratique du Congo (trimestres/semestres), avec la mention claire qu'il s'agit d'un document interne généré par la plateforme et non d'un bulletin d'État officiel.
+
+
+________________
+
+
+7. Espace Parents
+* Suivi en Temps Réel : Les parents ont un accès direct aux profils de leurs enfants, aux notes obtenues, au statut des paiements des frais scolaires (avec des indicateurs visuels en rouge en cas de retard) et aux communications de l'établissement.

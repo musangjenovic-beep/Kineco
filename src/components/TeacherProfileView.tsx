@@ -55,7 +55,24 @@ export const TeacherProfileView: React.FC<TeacherProfileViewProps> = ({
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
+
+  // 14-Day Profile Modification Restriction Calculation
+  const lastProfileUpdate = currentUser?.lastProfileUpdateDate;
+  let isProfileRestricted = false;
+  let daysRemaining = 0;
+  if (lastProfileUpdate) {
+    const lastMs = new Date(lastProfileUpdate).getTime();
+    const elapsedDays = (Date.now() - lastMs) / (1000 * 60 * 60 * 24);
+    if (elapsedDays < 14) {
+      isProfileRestricted = true;
+      daysRemaining = Math.ceil(14 - elapsedDays);
+    }
+  }
+
+  // Google account linking
+  const isGoogleLinked = Boolean(currentUser?.googleLinked || currentUser?.googleEmail);
 
   // Classes taught
   const assignedClasses = classes.filter((c) =>
@@ -69,13 +86,66 @@ export const TeacherProfileView: React.FC<TeacherProfileViewProps> = ({
   );
   const displaySubjects = assignedSubjects.length > 0 ? assignedSubjects : subjects.slice(0, 4);
 
+  const handleToggleGoogleLink = async () => {
+    if (!currentUser?.id) return;
+    setIsSaving(true);
+    setErrorMessage(null);
+    try {
+      const nextLinked = !isGoogleLinked;
+      const res = await fetch(`/api/users/${currentUser.id}/profile`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          googleLinked: nextLinked,
+          googleEmail: nextLinked ? email : undefined,
+          bypassDelay: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur lors de la mise à jour Google');
+      localStorage.setItem('edukin_session', JSON.stringify(data));
+      onUpdateCurrentUser(data);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Impossible de mettre à jour la liaison Google');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProfileRestricted) {
+      setErrorMessage(`Modification verrouillée : Vous devez attendre encore ${daysRemaining} jour(s) avant de modifier à nouveau votre profil.`);
+      return;
+    }
+
     setIsSaving(true);
     setSaveSuccess(false);
+    setErrorMessage(null);
 
     try {
       // 1. Sync with backend API (real DB update)
+      if (currentUser?.id) {
+        const res = await fetch(`/api/users/${currentUser.id}/profile`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fullName,
+            email,
+            phone,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || `Erreur lors de la mise à jour (${res.status})`);
+        }
+
+        // Update local session state
+        localStorage.setItem('edukin_session', JSON.stringify(data));
+        onUpdateCurrentUser(data);
+      }
+
       if (matchedTeacher?.id) {
         await fetch(`/api/teachers/${matchedTeacher.id}`, {
           method: 'PUT',
@@ -89,35 +159,11 @@ export const TeacherProfileView: React.FC<TeacherProfileViewProps> = ({
         });
       }
 
-      if (currentUser?.id) {
-        await fetch(`/api/users/${currentUser.id}/profile`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fullName,
-            email,
-            phone,
-          }),
-        });
-      }
-
-      // 2. Update local session state
-      if (currentUser) {
-        const updatedSession: UserSession = {
-          ...currentUser,
-          fullName,
-          email,
-          phone,
-        };
-        localStorage.setItem('edukin_session', JSON.stringify(updatedSession));
-        onUpdateCurrentUser(updatedSession);
-      }
-
       setLastSyncTime(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3500);
-    } catch (error) {
-      console.error('Erreur lors de la mise à jour du profil:', error);
+    } catch (error: any) {
+      setErrorMessage(error.message || 'Erreur lors de la mise à jour du profil');
     } finally {
       setIsSaving(false);
     }
@@ -278,6 +324,53 @@ export const TeacherProfileView: React.FC<TeacherProfileViewProps> = ({
             </div>
           </div>
 
+          {/* Google Account Linking Card */}
+          <div className="rounded-2xl bg-white dark:bg-[#181B20] border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.665-5.17 3.665-9.12z" />
+                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.13C3.27 21.41 7.33 24 12 24z" />
+                  <path fill="#FBBC05" d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.13z" />
+                  <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.27 2.59 1.25 6.58l4.03 3.13c.95-2.83 3.6-4.96 6.72-4.96z" />
+                </svg>
+                Connexion Google
+              </span>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  isGoogleLinked
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                }`}
+              >
+                {isGoogleLinked ? 'Lié' : 'Non associé'}
+              </span>
+            </h3>
+
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Liez votre compte Google pour vous connecter en 1 clic sans ressaisir vos identifiants.
+            </p>
+
+            {isGoogleLinked && (
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs font-mono text-slate-700 dark:text-slate-300 break-all">
+                {currentUser?.googleEmail || email}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleToggleGoogleLink}
+              disabled={isSaving}
+              className={`w-full py-2 px-3 rounded-xl text-xs font-semibold transition-all border flex items-center justify-center gap-2 cursor-pointer ${
+                isGoogleLinked
+                  ? 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950/40'
+                  : 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
+              }`}
+            >
+              {isGoogleLinked ? 'Délier le compte Google' : 'Lier mon compte Google'}
+            </button>
+          </div>
+
         </div>
 
         {/* Right Column: Complete Edit & Sync Form (2/3) */}
@@ -285,7 +378,7 @@ export const TeacherProfileView: React.FC<TeacherProfileViewProps> = ({
           <div className="h-full rounded-2xl bg-white dark:bg-[#181B20] border border-slate-200 dark:border-slate-800 p-6 shadow-xs flex flex-col justify-between space-y-6">
             
             <div>
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-6">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-4">
                 <div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">
                     Modifier les Coordonnées & l’État Civil
@@ -295,10 +388,48 @@ export const TeacherProfileView: React.FC<TeacherProfileViewProps> = ({
                   </p>
                 </div>
 
-                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                  Mode Édition
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    isProfileRestricted
+                      ? 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-950 dark:text-amber-300'
+                      : 'bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300'
+                  }`}
+                >
+                  {isProfileRestricted ? `Verrouillé (${daysRemaining}j restants)` : 'Modifications autorisées'}
                 </span>
               </div>
+
+              {/* 14-Day Profile Edit Restriction Banner */}
+              {isProfileRestricted ? (
+                <div className="mb-5 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-3">
+                  <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <span className="font-bold">Règle de sécurité des profils (Délai de 2 semaines) :</span>
+                    <p className="text-amber-800 dark:text-amber-300 leading-relaxed">
+                      Conformément à la politique de traçabilité, les informations de profil (nom, numéro, adresse e-mail) ne peuvent être modifiées qu'une fois toutes les 2 semaines. Votre dernière mise à jour est active. Prochaine modification autorisée dans{' '}
+                      <strong>{daysRemaining} jour(s)</strong>.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    Délai de sécurité de 2 semaines respecté : vous pouvez mettre à jour vos coordonnées.
+                  </span>
+                  {lastProfileUpdate && (
+                    <span className="text-[11px] text-slate-400">
+                      Dernier changement : {new Date(lastProfileUpdate).toLocaleDateString('fr-FR')}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {errorMessage && (
+                <div className="mb-4 p-3 rounded-xl bg-red-50 text-red-700 border border-red-200 text-xs">
+                  {errorMessage}
+                </div>
+              )}
 
               <form id="teacher-profile-form" onSubmit={handleSubmit} className="space-y-5">
                 
@@ -306,16 +437,21 @@ export const TeacherProfileView: React.FC<TeacherProfileViewProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                      Nom complet officiel *
+                      Nom complet officiel * {isProfileRestricted && '(Verrouillé)'}
                     </label>
                     <div className="relative">
                       <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                       <input
                         type="text"
                         required
+                        disabled={isProfileRestricted}
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                        className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl border outline-none ${
+                          isProfileRestricted
+                            ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed'
+                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500'
+                        }`}
                         placeholder="Ex: Professeur Jean-Paul Kalambayi"
                       />
                     </div>
@@ -329,9 +465,14 @@ export const TeacherProfileView: React.FC<TeacherProfileViewProps> = ({
                       <GraduationCap className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                       <input
                         type="text"
+                        disabled={isProfileRestricted}
                         value={qualification}
                         onChange={(e) => setQualification(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                        className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl border outline-none ${
+                          isProfileRestricted
+                            ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed'
+                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500'
+                        }`}
                         placeholder="Ex: Licence Pédagogique, Agrégation..."
                       />
                     </div>
@@ -342,16 +483,21 @@ export const TeacherProfileView: React.FC<TeacherProfileViewProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                      Adresse Email professionnelle *
+                      Adresse Email professionnelle * {isProfileRestricted && '(Verrouillé)'}
                     </label>
                     <div className="relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                       <input
                         type="email"
                         required
+                        disabled={isProfileRestricted}
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                        className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl border outline-none ${
+                          isProfileRestricted
+                            ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed'
+                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500'
+                        }`}
                         placeholder="professeur@masomo.cd"
                       />
                     </div>
@@ -359,16 +505,21 @@ export const TeacherProfileView: React.FC<TeacherProfileViewProps> = ({
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                      Numéro Téléphone / WhatsApp *
+                      Numéro Téléphone / WhatsApp * {isProfileRestricted && '(Verrouillé)'}
                     </label>
                     <div className="relative">
                       <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                       <input
                         type="tel"
                         required
+                        disabled={isProfileRestricted}
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                        className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl border outline-none ${
+                          isProfileRestricted
+                            ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed'
+                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500'
+                        }`}
                         placeholder="+243 81 500 1234"
                       />
                     </div>
@@ -436,10 +587,9 @@ export const TeacherProfileView: React.FC<TeacherProfileViewProps> = ({
             </div>
 
           </div>
-        </div>
-
       </div>
 
+      </div>
     </div>
   );
 };

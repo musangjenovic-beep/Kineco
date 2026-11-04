@@ -278,6 +278,9 @@ export const ParentView = ({
                               {g.score}
                             </span>
                             <span className="text-slate-400 font-normal"> / {g.maxScore}</span>
+                            <span className="block text-[10px] text-blue-600 font-bold font-mono">
+                              ({((g.score / g.maxScore) * 20).toFixed(1)} / 20 pts)
+                            </span>
                           </td>
                           <td className="py-2.5 px-3 text-center font-bold font-mono">
                             <span
@@ -329,6 +332,74 @@ export const ParentView = ({
               </div>
             </div>
           )}
+
+          {/* Detailed Fee Tranches with Bold Red Overdue Indicators (Article 76) */}
+          <div className="space-y-3">
+            <h3 className="font-bold text-slate-900 text-sm flex items-center justify-between">
+              <span>Échéancier des Frais Scolaires & Tranches d'Inscription</span>
+              <span className="text-xs text-slate-500">
+                Solde global restant : <strong className="text-slate-900 font-mono">${balanceUSD} USD</strong>
+              </span>
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {fees.map((fee) => {
+                const dueDateObj = fee.dueDate ? new Date(fee.dueDate) : null;
+                const isOverdue = dueDateObj ? dueDateObj < new Date() : false;
+                const daysLate = dueDateObj && isOverdue
+                  ? Math.floor((new Date().getTime() - dueDateObj.getTime()) / (1000 * 3600 * 24))
+                  : 0;
+
+                return (
+                  <div
+                    key={fee.id}
+                    className={`p-3.5 rounded-xl border transition-all space-y-2 ${
+                      isOverdue && balanceUSD > 0
+                        ? 'border-red-400 bg-red-50/70 border-l-4 border-l-red-600 shadow-xs'
+                        : 'border-slate-200 bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        {fee.installmentName && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 mb-1 inline-block">
+                            {fee.installmentName}
+                          </span>
+                        )}
+                        <strong className="block text-slate-900 font-bold">{fee.name}</strong>
+                      </div>
+                      <span className="font-mono font-bold text-slate-900 text-sm">${fee.amountUSD} USD</span>
+                    </div>
+
+                    <div className="text-[10px] text-slate-500">
+                      Équivalent : {(fee.amountUSD * rate).toLocaleString()} CDF
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between">
+                      <span className="text-[10px] text-slate-500">
+                        Échéance : <strong>{fee.dueDate || 'Selon calendrier'}</strong>
+                      </span>
+
+                      {/* BOLD RED ALERT FOR OVERDUE (Article 76) */}
+                      {isOverdue && balanceUSD > 0 ? (
+                        <span className="inline-flex items-center gap-1 bg-red-600 text-white font-black px-2 py-0.5 rounded-full text-[10px] animate-pulse">
+                          <span>RETARD (-{daysLate}j)</span>
+                        </span>
+                      ) : balanceUSD === 0 ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                          Réglé
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-semibold text-slate-500">
+                          À régulariser
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Quick Online Payment Form */}

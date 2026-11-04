@@ -1,0 +1,76 @@
+﻿Plan d'Amélioration et Mises à Jour de l'Application Scolaire Existante
+Ce document recense l'ensemble des ajustements, optimisations et nouvelles fonctionnalités à intégrer dans l'application existante pour répondre aux besoins opérationnels et administratifs.
+
+
+________________
+
+
+1. Administration Globale (Entreprise & Super Administrateur)
+* Hiérarchisation des Rôles de l'Entreprise : Structurer les rôles au-delà du Super Administrateur unique pour inclure des cadres spécialisés :
+   * Sécurité & Conformité : Gestion des accès et journaux d'activité.
+   * Finances & Facturation : Suivi des abonnements et des transactions.
+   * Support & Intégration : Possibilité pour l'équipe de l'entreprise de créer manuellement un compte établissement après réception des documents légaux justificatifs en cas de blocage d'inscription.
+* Gestion des Abonnements :
+   * Implémenter une distinction claire entre les forfaits Basiques et Premiums (avec restrictions et fonctionnalités avancées).
+   * Mettre en place un mécanisme de suspension temporaire automatique des accès en cas de non-paiement de l'abonnement.
+   * Centraliser les paiements Mobile Money via l'entreprise avec notification instantanée et synchronisation pour l'établissement.
+
+
+________________
+
+
+2. Authentification, Sécurité et Profils
+* Connexion via Google : Permettre aux utilisateurs (propriétaires, administrateurs, enseignants) de lier et de se connecter via leur compte Google en un clic.
+* Récupération de Mot de Passe : Ajouter un flux de réinitialisation sécurisée par e-mail en cas d'oubli des identifiants.
+* Règle des Profils : Appliquer une restriction technique interdisant la modification des informations de profil (nom, numéro, photo) plus d'une fois toutes les 2 semaines.
+
+
+________________
+
+
+3. Gestion Interne et Rôles au Sein des Établissements
+* Structure Pédagogique et Sections : Permettre à chaque école de configurer ses propres sections (ex. : Scientifique, Littéraire, Électricité) et de rattacher les classes correspondantes.
+* Direction des Études & Grille Horaire :
+   * Centraliser la création des cours par l'établissement avant l'attribution aux professeurs.
+   * Assurer qu'un cours est dispensé par un seul professeur principal (qui peut enseigner plusieurs matières).
+   * Structurer les horaires de manière flexible (gestion de 6 à 8 heures de cours par jour selon les options).
+* Directeur de Discipline :
+   * Restreindre la sélection des élèves par classe et par option spécifique (et non de manière globale à toute l'école).
+   * Gérer les infractions avec un champ "autres infractions" dont la date et l'heure sont verrouillées et immuables.
+* Appel Journalier :
+   * Le professeur effectue l'appel avec notification immédiate à la direction.
+   * Verrouillage des modifications d'appel une fois la journée écoulée.
+* Comptabilité et Frais Scolaires :
+   * Permettre à la caisse de cibler des classes précises pour l'application des frais, de suivre les échéances et d'afficher des alertes visuelles en rouge pour les élèves en retard de paiement.
+   * Permettre d'ajouter, modifier ou supprimer des frais (ajustement flexible des tranches de paiement au cours de l'année scolaire).
+   * Valider les paiements physiques ou mobiles avec synchronisation en temps réel sur le compte des parents.
+
+
+________________
+
+
+4. Gestion des Élèves et Transferts Inter-établissements
+* Inscriptions Détaillées : Structurer l'admission via le secrétariat avec l'ensemble des informations d'état civil, antécédents et parcours académique.
+* Transfert Sécurisé d'Élèves :
+   * Ajouter une fonctionnalité de transfert d'un élève d'un établissement enregistré vers un autre de la plateforme.
+   * Permettre de transférer l'intégralité du dossier, du palmarès et des points cumulés (avec validation par l'école d'accueil).
+
+
+________________
+
+
+5. Espace Enseignants, Notes et Bulletins (Contexte RDC)
+* Saisie des Notes et Évaluations :
+   * Permettre aux professeurs de consulter l'historique de toutes les interrogations et côtes déjà saisies.
+   * La plateforme doit automatiquement gérer les pondérations pour s'aligner sur les barèmes officiels (ex. : ramener les totaux à 20 points).
+* Limitation des Accès Enseignant : Les enseignants n'ont de visibilité que sur les élèves et les cours qui leur sont directement attribués (cloisonnement strict entre écoles et entre classes non assignées).
+* Génération de Bulletins :
+   * Adapter les bulletins aux périodes en vigueur en République Démocratique du Congo (trimestres/semestres).
+   * Ajouter obligatoirement la mention explicite stipulant qu'il s'agit d'un document interne généré par la plateforme et non d'un bulletin officiel de l'État.
+
+
+________________
+
+
+6. Espace Parents
+* Suivi Transparent : Les parents disposent d'une vue sur les profils de leurs enfants, le détail des frais scolaires (avec indicateurs de retard en rouge) et les notes enregistrées par la comptabilité et les enseignants.

@@ -1,5 +1,8 @@
 export type UserRole =
   | 'super_admin'
+  | 'cadre_securite'
+  | 'cadre_finances'
+  | 'cadre_support'
   | 'directeur'
   | 'admin_scolaire'
   | 'directeur_etudes'
@@ -24,6 +27,9 @@ export interface School {
   currencyDefault: 'USD' | 'CDF';
   exchangeRateUsdCdf: number; // e.g. 2850 CDF for 1 USD
   plan: 'Basic' | 'Standard' | 'Premium';
+  subscriptionStatus?: 'active' | 'suspended';
+  subscriptionExpiresAt?: string;
+  sections?: string[]; // Custom pedagogical sections (ex: Scientifique, Littéraire, Électricité, etc.)
   active: boolean;
   createdAt: string;
 }
@@ -58,6 +64,9 @@ export interface SchoolClass {
   roomNumber?: string;
   capacity: number;
   mainTeacherId?: string;
+  mainTeacherName?: string;
+  titulaireId?: string;
+  titulaireName?: string;
 }
 
 export interface Subject {
@@ -79,6 +88,7 @@ export interface ClassSubject {
   coefficient: number;
   maxScore: number;
   weeklyHours: number;
+  locked?: boolean;
 }
 
 export interface Student {
@@ -90,13 +100,38 @@ export interface Student {
   postName: string; // Typical Congolese naming: Nom, Post-nom, Prénom
   gender: 'M' | 'F';
   birthDate: string;
+  dateOfBirth?: string;
   birthPlace: string;
   address: string;
   classId: string;
   parentId: string;
   photoUrl?: string;
+  nationality?: string;
+  birthCertificateNumber?: string;
+  previousSchool?: string;
+  lastClassAttended?: string;
+  previousAverage?: number;
+  guardianName?: string;
+  guardianPhone?: string;
+  guardianJob?: string;
+  guardianProfession?: string;
+  parentPhone?: string;
+  transferStatus?: 'none' | 'pending' | 'transferred';
+  transferTargetSchoolId?: string;
+  transferOriginSchoolId?: string;
+  transferRequestedAt?: string;
+  transferApprovedAt?: string;
+  transferHistoryNotes?: string;
+  academicHistory?: {
+    year: string;
+    schoolName: string;
+    className: string;
+    generalAverage: number;
+    passed: boolean;
+  }[];
   active: boolean;
   registrationDate: string;
+  enrollmentDate?: string;
 }
 
 export interface Parent {
@@ -115,12 +150,15 @@ export interface Teacher {
   schoolId: string;
   matricule: string;
   fullName: string;
+  firstName?: string;
+  lastName?: string;
   phone: string;
   email: string;
   specialty: string;
   assignedClasses: string[]; // classIds
   qualification?: string;
   userId?: string;
+  active?: boolean;
 }
 
 export interface Staff {
@@ -143,6 +181,8 @@ export interface AttendanceRecord {
   justification?: string;
   recordedBy: string;
   recordedAt: string;
+  isLocked?: boolean;
+  directionNotified?: boolean;
 }
 
 export interface Grade {
@@ -166,6 +206,8 @@ export interface DisciplineIncident {
   id: string;
   schoolId: string;
   studentId: string;
+  classId?: string;
+  section?: string;
   date: string;
   category: 'Retard répété' | 'Absence injustifiée' | 'Indiscipline' | 'Bagarre' | 'Uniforme non conforme' | 'Autre';
   description: string;
@@ -174,6 +216,8 @@ export interface DisciplineIncident {
   parentNotified: boolean;
   recordedBy: string;
   recordedAt: string;
+  immutableTimestamp?: string; // Locked exact timestamp for "Autres infractions"
+  isOther?: boolean;
 }
 
 export interface FeeDefinition {
@@ -185,6 +229,8 @@ export interface FeeDefinition {
   amountCDF: number;
   dueDate: string;
   mandatory: boolean;
+  targetClassIds?: string[]; // Specific targeted classes (empty/undefined = all classes)
+  installmentName?: string; // Tranche: e.g. "Tranche 1", "Acompte", "Solde"
 }
 
 export interface PaymentRecord {
@@ -326,6 +372,9 @@ export interface UserAccount {
   teacherId?: string; // If role === 'enseignant'
   parentId?: string; // If role === 'parent'
   createdBy?: string;
+  lastProfileUpdateDate?: string; // Date of last profile change (14-day rule)
+  googleLinked?: boolean;
+  googleEmail?: string;
 }
 
 export interface UserSession {
@@ -342,6 +391,32 @@ export interface UserSession {
   parentStudentIds?: string[]; // If role === 'parent'
   activeStudentId?: string; // Current child selected by parent
   token?: string;
+  lastProfileUpdateDate?: string;
+  googleLinked?: boolean;
+  googleEmail?: string;
+}
+
+export interface StudentTransfer {
+  id: string;
+  studentId: string;
+  studentName: string;
+  matricule: string;
+  sourceSchoolId: string;
+  sourceSchoolName: string;
+  targetSchoolId: string;
+  targetSchoolName: string;
+  targetClassId?: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  requestedAt: string;
+  reviewedAt?: string;
+  academicSummary: {
+    gradesCount: number;
+    generalAverage?: number;
+    lastPeriod?: string;
+    conduct?: string;
+  };
+  remarks?: string;
+  reason?: string;
 }
 
 export interface BulletinSubjectResult {

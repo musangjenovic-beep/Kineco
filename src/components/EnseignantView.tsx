@@ -172,7 +172,11 @@ export const EnseignantView = ({
   const activeClassList = teacherClasses.length > 0 ? teacherClasses : classes.filter(Boolean);
 
   // Tutored classes for Titulaire de classe role
-  const tutoredClasses = classes.filter((c) => Boolean(c) && c.mainTeacherId === teacherObj?.id);
+  const tutoredClasses = classes.filter(
+    (c) =>
+      Boolean(c) &&
+      (c.mainTeacherId === teacherObj?.id || (currentUser?.id && c.mainTeacherId === currentUser.id))
+  );
   const activeTutoredClasses = tutoredClasses.length > 0 ? tutoredClasses : activeClassList;
   const isTitulaire = tutoredClasses.length > 0 || activeClassList.length > 0;
 
@@ -253,6 +257,7 @@ export const EnseignantView = ({
   const [gradeInputState, setGradeInputState] = useState<Record<string, number>>({});
   const [evaluationTitle, setEvaluationTitle] = useState<string>('Interrogation n°1');
   const [evaluationType, setEvaluationType] = useState<string>('interrogation');
+  const [notesMode, setNotesMode] = useState<'saisie' | 'historique'>('saisie');
 
   // Success and notification banners
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
@@ -1343,15 +1348,27 @@ export const EnseignantView = ({
 
                   {/* Bouton d'enregistrement pleine largeur en bas */}
                   <div className="pt-2 sticky bottom-16 sm:bottom-0 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-sm pb-4">
-                    <button
-                      type="button"
-                      id="btn-save-attendance-main"
-                      onClick={handleSaveAttendance}
-                      className="w-full py-3 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-sm shadow-md hover:opacity-95 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
-                    >
-                      <Save className="w-4 h-4" />
-                      <span>ENREGISTRER L'APPEL ({classStudents.length} ÉLÈVES)</span>
-                    </button>
+                    {attendanceDate < systemTodayStr ? (
+                      <div className="w-full p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span>Appel Verrouillé : La journée ({attendanceDate}) est passée. Modifications interdites après minuit (Article 42 & 63).</span>
+                        </div>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-200 dark:bg-amber-900 font-bold uppercase">
+                          Verrouillé
+                        </span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        id="btn-save-attendance-main"
+                        onClick={handleSaveAttendance}
+                        className="w-full py-3 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-sm shadow-md hover:opacity-95 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                      >
+                        <Save className="w-4 h-4" />
+                        <span>ENREGISTRER L'APPEL AVEC NOTIFICATION DIRECTION ({classStudents.length} ÉLÈVES)</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -1359,146 +1376,245 @@ export const EnseignantView = ({
               {/* SOUS-VUE 2 : SAISIR LES NOTES (PLEINE LARGEUR) */}
               {classSubTab === 'notes' && (
                 <div className="w-full space-y-3">
-                  <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                      <div>
-                        <label htmlFor="select-class-notes-period" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                          Période scolaire
-                        </label>
-                        <select
-                          id="select-class-notes-period"
-                          value={selectedPeriodId}
-                          onChange={(e) => setSelectedPeriodId(e.target.value)}
-                          className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-white"
-                        >
-                          {periods.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} ({p.code})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                  <div className="flex flex-wrap items-center justify-between bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 gap-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNotesMode('saisie')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          notesMode === 'saisie'
+                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        Saisie des Cotes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNotesMode('historique')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                          notesMode === 'historique'
+                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>Historique des Interrogations & Cotes</span>
+                      </button>
+                    </div>
 
-                      <div>
-                        <label htmlFor="input-class-notes-title" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                          Titre de l'évaluation
-                        </label>
-                        <input
-                          id="input-class-notes-title"
-                          type="text"
-                          value={evaluationTitle}
-                          onChange={(e) => setEvaluationTitle(e.target.value)}
-                          placeholder="Ex: Interrogation n°1..."
-                          className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
-                        />
-                      </div>
+                    <span className="text-[11px] font-semibold text-slate-500">
+                      Barème officiel automatique ramené à 20 points
+                    </span>
+                  </div>
 
-                      {/* Coefficient modifiable par le professeur */}
-                      <div>
-                        <label htmlFor="input-class-notes-coeff" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                          Coefficient (choisi par vous) *
-                        </label>
-                        <div className="flex items-center gap-1">
-                          <input
-                            id="input-class-notes-coeff"
-                            type="number"
-                            min="0.5"
-                            max="10"
-                            step="0.5"
-                            value={teacherCoefficient}
-                            onChange={(e) => setTeacherCoefficient(Number(e.target.value) || 1)}
-                            className="w-16 px-2 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-center text-slate-900 dark:text-white"
-                          />
-                          <div className="flex gap-0.5">
-                            {[1, 2, 3, 4].map((cf) => (
-                              <button
-                                key={cf}
-                                type="button"
-                                onClick={() => setTeacherCoefficient(cf)}
-                                className={`px-1.5 py-1 text-[10px] rounded font-bold transition-colors ${
-                                  teacherCoefficient === cf
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                                }`}
-                              >
-                                {cf}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+                  {notesMode === 'historique' ? (
+                    <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center justify-between">
+                        <span>Historique des Cotes Consignées • {selectedSubject?.name} ({selectedClass?.name})</span>
+                        <span className="text-xs text-slate-400 font-mono">
+                          {grades.filter((g) => g.classId === selectedClass.id && g.subjectId === selectedSubject.id).length} enregistrements
+                        </span>
+                      </h4>
 
-                      {/* Barème maximum modifiable */}
-                      <div>
-                        <label htmlFor="select-class-notes-max" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                          Barème / Note Maximale
-                        </label>
-                        <select
-                          id="select-class-notes-max"
-                          value={teacherMaxScore}
-                          onChange={(e) => setTeacherMaxScore(Number(e.target.value))}
-                          className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-900 dark:text-white"
-                        >
-                          <option value="20">Sur 20 points (Standard)</option>
-                          <option value="40">Sur 40 points</option>
-                          <option value="50">Sur 50 points</option>
-                          <option value="10">Sur 10 points</option>
-                          <option value="100">Sur 100 points</option>
-                        </select>
+                      <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
+                            <tr>
+                              <th className="py-2.5 px-3">Élève</th>
+                              <th className="py-2.5 px-3">Période</th>
+                              <th className="py-2.5 px-3">Cote Brute</th>
+                              <th className="py-2.5 px-3">Barème Officiel RDC</th>
+                              <th className="py-2.5 px-3">Statut</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-sans">
+                            {classStudents.map((stu) => {
+                              const stuGrades = grades.filter((g) => g.studentId === stu.id && g.subjectId === selectedSubject.id);
+                              if (stuGrades.length === 0) return null;
+                              return stuGrades.map((g) => {
+                                const per = periods.find((p) => p.id === (g.periodId || g.academicPeriodId));
+                                const score20 = ((g.score / (g.maxScore || 20)) * 20).toFixed(1);
+                                return (
+                                  <tr key={g.id || `${stu.id}-${g.periodId}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                                    <td className="py-2 px-3 font-semibold text-slate-900 dark:text-white">
+                                      {stu.lastName} {stu.firstName}
+                                    </td>
+                                    <td className="py-2 px-3 text-slate-600 dark:text-slate-400">
+                                      {per?.name || 'Période courante'} ({per?.code || 'P'})
+                                    </td>
+                                    <td className="py-2 px-3 font-mono font-bold">
+                                      {g.score} / {g.maxScore || 20}
+                                    </td>
+                                    <td className="py-2 px-3">
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 font-mono">
+                                        {score20} / 20 pts
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-3">
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                        g.status === 'published' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                                      }`}>
+                                        {g.status === 'published' ? 'Publiée' : 'Brouillon'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              });
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Lignes de saisie par élève */}
-                  <div className="space-y-2">
-                    {classStudents.map((stu, idx) => {
-                      const currentScore = gradeInputState[stu.id] !== undefined ? gradeInputState[stu.id] : '';
-                      return (
-                        <div
-                          key={stu.id}
-                          className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3"
-                        >
+                  ) : (
+                    <>
+                      <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                           <div>
-                            <div className="font-bold text-sm text-slate-900 dark:text-white">
-                              {stu.lastName} {stu.postName} {stu.firstName}
-                            </div>
-                            <div className="text-[11px] text-slate-400 font-mono">
-                              {stu.matricule}
+                            <label htmlFor="select-class-notes-period" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                              Période scolaire
+                            </label>
+                            <select
+                              id="select-class-notes-period"
+                              value={selectedPeriodId}
+                              onChange={(e) => setSelectedPeriodId(e.target.value)}
+                              className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-white"
+                            >
+                              {periods.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name} ({p.code})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label htmlFor="input-class-notes-title" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                              Titre de l'évaluation
+                            </label>
+                            <input
+                              id="input-class-notes-title"
+                              type="text"
+                              value={evaluationTitle}
+                              onChange={(e) => setEvaluationTitle(e.target.value)}
+                              placeholder="Ex: Interrogation n°1..."
+                              className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
+                            />
+                          </div>
+
+                          {/* Coefficient modifiable par le professeur */}
+                          <div>
+                            <label htmlFor="input-class-notes-coeff" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                              Coefficient (choisi par vous) *
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <input
+                                id="input-class-notes-coeff"
+                                type="number"
+                                min="0.5"
+                                max="10"
+                                step="0.5"
+                                value={teacherCoefficient}
+                                onChange={(e) => setTeacherCoefficient(Number(e.target.value) || 1)}
+                                className="w-16 px-2 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-center text-slate-900 dark:text-white"
+                              />
+                              <div className="flex gap-0.5">
+                                {[1, 2, 3, 4].map((cf) => (
+                                  <button
+                                    key={cf}
+                                    type="button"
+                                    onClick={() => setTeacherCoefficient(cf)}
+                                    className={`px-1.5 py-1 text-[10px] rounded font-bold transition-colors ${
+                                      teacherCoefficient === cf
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                                    }`}
+                                  >
+                                    {cf}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <input
-                              id={`input-score-${idx}`}
-                              type="number"
-                              min="0"
-                              max={currentMaxScore}
-                              step="0.5"
-                              placeholder={`/ ${currentMaxScore}`}
-                              value={currentScore}
-                              onChange={(e) => handleScoreChange(stu.id, e.target.value)}
-                              onKeyDown={(e) => handleScoreKeyDown(e, idx)}
-                              className="w-24 text-center py-2 px-2 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <span className="text-xs text-slate-500">/ {currentMaxScore}</span>
+                          {/* Barème maximum modifiable */}
+                          <div>
+                            <label htmlFor="select-class-notes-max" className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                              Barème / Note Maximale
+                            </label>
+                            <select
+                              id="select-class-notes-max"
+                              value={teacherMaxScore}
+                              onChange={(e) => setTeacherMaxScore(Number(e.target.value))}
+                              className="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-900 dark:text-white"
+                            >
+                              <option value="20">Sur 20 points (Standard)</option>
+                              <option value="40">Sur 40 points</option>
+                              <option value="50">Sur 50 points</option>
+                              <option value="10">Sur 10 points</option>
+                              <option value="100">Sur 100 points</option>
+                            </select>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
 
-                  {/* Bouton enregistrement des cotes */}
-                  <div className="pt-2 sticky bottom-16 sm:bottom-0 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-sm pb-4">
-                    <button
-                      type="button"
-                      id="btn-save-grades-main"
-                      onClick={() => handleSaveGradesAs('draft')}
-                      className="w-full py-3 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-sm shadow-md hover:opacity-95 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
-                    >
-                      <Save className="w-4 h-4" />
-                      <span>ENREGISTRER LES COTES ({enteredScores.length}/{classStudents.length} SAISIES)</span>
-                    </button>
-                  </div>
+                      {/* Lignes de saisie par élève avec barème automatique /20 */}
+                      <div className="space-y-2">
+                        {classStudents.map((stu, idx) => {
+                          const currentScore = gradeInputState[stu.id] !== undefined ? gradeInputState[stu.id] : '';
+                          return (
+                            <div
+                              key={stu.id}
+                              className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3"
+                            >
+                              <div>
+                                <div className="font-bold text-sm text-slate-900 dark:text-white">
+                                  {stu.lastName} {stu.postName} {stu.firstName}
+                                </div>
+                                <div className="text-[11px] text-slate-400 font-mono">
+                                  {stu.matricule}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <input
+                                  id={`input-score-${idx}`}
+                                  type="number"
+                                  min="0"
+                                  max={currentMaxScore}
+                                  step="0.5"
+                                  placeholder={`/ ${currentMaxScore}`}
+                                  value={currentScore}
+                                  onChange={(e) => handleScoreChange(stu.id, e.target.value)}
+                                  onKeyDown={(e) => handleScoreKeyDown(e, idx)}
+                                  className="w-24 text-center py-2 px-2 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <span className="text-xs text-slate-500">/ {currentMaxScore}</span>
+                                {typeof currentScore === 'number' && (
+                                  <span className="px-2 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-mono whitespace-nowrap">
+                                    = {((currentScore / currentMaxScore) * 20).toFixed(1)} / 20 pts
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Bouton enregistrement des cotes */}
+                      <div className="pt-2 sticky bottom-16 sm:bottom-0 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-sm pb-4">
+                        <button
+                          type="button"
+                          id="btn-save-grades-main"
+                          onClick={() => handleSaveGradesAs('draft')}
+                          className="w-full py-3 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-sm shadow-md hover:opacity-95 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                        >
+                          <Save className="w-4 h-4" />
+                          <span>ENREGISTRER LES COTES ({enteredScores.length}/{classStudents.length} SAISIES)</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 

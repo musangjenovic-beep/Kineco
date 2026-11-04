@@ -435,36 +435,65 @@ export const dataService = {
     return db.getAcademicPeriods(schoolId);
   },
 
-  // 3. Classes
+  // 3. Classes & Titulaire
   async getClasses(schoolId: string): Promise<SchoolClass[]> {
+    const local = db.getClasses(schoolId);
     if (supabase) {
       try {
+        const targetSchoolId = await this.resolveSupabaseSchoolId(schoolId);
         const { data, error } = await supabase
           .from('classes')
           .select('*')
-          .eq('school_id', schoolId)
+          .or(`school_id.eq.${targetSchoolId},school_id.eq.${schoolId}`)
           .order('name');
         if (!error && data && data.length > 0) {
-          return data.map((row) => ({
-            id: row.id,
-            schoolId: row.school_id,
-            academicYearId: row.academic_year_id,
-            name: row.name,
-            level: row.level,
-            section: row.section,
-            roomNumber: row.room_number,
-            capacity: row.capacity,
-            mainTeacherId: row.main_teacher_id,
-          }));
+          // Also fetch profiles to get main teacher names
+          const { data: profs } = await supabase.from('profiles').select('id, full_name');
+          const profMap = new Map((profs || []).map((p) => [p.id, p.full_name]));
+
+          const localNames = new Set(local.map((c) => c.name.toLowerCase().trim()));
+          for (const row of data) {
+            const mainTeacherName = row.main_teacher_id ? profMap.get(row.main_teacher_id) || undefined : undefined;
+            const existingLocal = local.find(
+              (c) => c.id === row.id || c.name.toLowerCase().trim() === row.name.toLowerCase().trim()
+            );
+
+            if (existingLocal) {
+              if (row.main_teacher_id) {
+                existingLocal.mainTeacherId = row.main_teacher_id;
+                existingLocal.mainTeacherName = mainTeacherName;
+              }
+            } else {
+              local.push({
+                id: row.id,
+                schoolId: row.school_id,
+                academicYearId: row.academic_year_id,
+                name: row.name,
+                level: row.level,
+                section: row.section,
+                roomNumber: row.room_number,
+                capacity: row.capacity,
+                mainTeacherId: row.main_teacher_id,
+                mainTeacherName,
+              });
+            }
+          }
         }
       } catch (e) {
         console.warn('[Supabase] fallback to local for getClasses');
       }
     }
-    return db.getClasses(schoolId);
+    return local;
   },
 
-  async updateClass(schoolId: string, classId: string, updates: Partial<SchoolClass>, updatedBy = 'Direction'): Promise<SchoolClass | undefined> {
+  async updateClass(
+    schoolId: string,
+    classId: string,
+    updates: Partial<SchoolClass>,
+    updatedBy = 'Direction'
+  ): Promise<SchoolClass | undefined> {
+    const local = db.updateClass(schoolId, classId, updates, updatedBy);
+
     if (supabase) {
       try {
         const updatePayload: any = {};
@@ -473,60 +502,220 @@ export const dataService = {
         if (updates.section !== undefined) updatePayload.section = updates.section;
         if (updates.roomNumber !== undefined) updatePayload.room_number = updates.roomNumber;
         if (updates.capacity !== undefined) updatePayload.capacity = updates.capacity;
-        if (updates.mainTeacherId !== undefined) updatePayload.main_teacher_id = updates.mainTeacherId || null;
-
-        const { data, error } = await supabase
-          .from('classes')
-          .update(updatePayload)
-          .eq('id', classId)
-          .select()
-          .maybeSingle();
-
-        if (!error && data) {
-          return {
-            id: data.id,
-            schoolId: data.school_id,
-            academicYearId: data.academic_year_id,
-            name: data.name,
-            level: data.level,
-            section: data.section,
-            roomNumber: data.room_number,
-            capacity: data.capacity,
-            mainTeacherId: data.main_teacher_id,
-          };
+        if (updates.mainTeacherId !== undefined) {
+          // If mainTeacherId is a local ID or UUID
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            updates.mainTeacherId || ''
+          );
+          updatePayload.main_teacher_id = isUuid ? updates.mainTeacherId : null;
         }
-      } catch (e) {
-        console.warn('[Supabase] fallback to local for updateClass');
+
+        const isClassUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(classId);
+
+        let query = supabase.from('classes').update(updatePayload);
+        if (isClassUuid) {
+          query = query.eq('id', classId);
+        } else if (local?.name) {
+          query = query.eq('name', local.name);
+        }
+
+        const { data, error } = await query.select().maybeSingle();
+        if (!error && data && local) {
+          if (data.main_teacher_id) {
+            local.mainTeacherId = data.main_teacher_id;
+            const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', data.main_teacher_id).maybeSingle();
+            if (prof?.full_name) {
+              local.mainTeacherName = prof.full_name;
+            }
+          }
+        }
+      } catch (e: any) {
+        console.warn('[Supabase] updateClass fallback:', e.message);
       }
     }
-    return db.updateClass(schoolId, classId, updates, updatedBy);
+
+    return local;
   },
 
-  // 4. Matières
+  // 4. Matières (Subjects)
   async getSubjects(schoolId: string): Promise<Subject[]> {
+    const local = db.getSubjects(schoolId);
     if (supabase) {
       try {
+        const targetSchoolId = await this.resolveSupabaseSchoolId(schoolId);
         const { data, error } = await supabase
           .from('subjects')
           .select('*')
-          .eq('school_id', schoolId)
+          .or(`school_id.eq.${targetSchoolId},school_id.eq.${schoolId}`)
           .order('name');
         if (!error && data && data.length > 0) {
-          return data.map((row) => ({
-            id: row.id,
-            schoolId: row.school_id,
-            name: row.name,
-            code: row.code,
-            category: row.category,
-            defaultCoefficient: Number(row.default_coefficient),
-            defaultMaxScore: Number(row.default_max_score),
-          }));
+          const localCodes = new Set(local.map((s) => s.code.toUpperCase()));
+          for (const row of data) {
+            if (!localCodes.has(row.code.toUpperCase())) {
+              local.push({
+                id: row.id,
+                schoolId: row.school_id,
+                name: row.name,
+                code: row.code,
+                category: row.category as any,
+                defaultCoefficient: Number(row.default_coefficient),
+                defaultMaxScore: Number(row.default_max_score),
+              });
+            }
+          }
         }
       } catch (e) {
         console.warn('[Supabase] fallback to local for getSubjects');
       }
     }
-    return db.getSubjects(schoolId);
+    return local;
+  },
+
+  async createSubject(schoolId: string, data: any): Promise<Subject> {
+    const local = db.createSubject(schoolId, {
+      name: data.name.trim(),
+      code: data.code.trim().toUpperCase(),
+      category: data.category || 'Sciences',
+      defaultCoefficient: Number(data.defaultCoefficient) || 1,
+      defaultMaxScore: Number(data.defaultMaxScore) || 20,
+    });
+
+    if (supabase) {
+      try {
+        const targetSchoolId = await this.resolveSupabaseSchoolId(schoolId);
+        const { data: created, error } = await supabase
+          .from('subjects')
+          .insert({
+            school_id: targetSchoolId,
+            name: data.name.trim(),
+            code: data.code.trim().toUpperCase(),
+            category: data.category || 'Sciences',
+            default_coefficient: Number(data.defaultCoefficient) || 1,
+            default_max_score: Number(data.defaultMaxScore) || 20,
+          })
+          .select()
+          .maybeSingle();
+
+        if (!error && created) {
+          local.id = created.id;
+        }
+      } catch (err: any) {
+        console.warn('[Supabase] createSubject error:', err.message);
+      }
+    }
+    return local;
+  },
+
+  // 4b. Attribution des Cours aux Classes (Class Subjects)
+  async getClassSubjects(schoolId: string, classId?: string): Promise<ClassSubject[]> {
+    const local = db.getClassSubjects(schoolId, classId);
+    if (supabase) {
+      try {
+        let q = supabase.from('class_subjects').select('*');
+        if (classId) {
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(classId);
+          if (isUuid) {
+            q = q.eq('class_id', classId);
+          }
+        }
+        const { data, error } = await q;
+        if (!error && data && data.length > 0) {
+          const localKeys = new Set(local.map((cs) => `${cs.classId}-${cs.subjectId}`));
+          for (const row of data) {
+            const key = `${row.class_id}-${row.subject_id}`;
+            if (!localKeys.has(key)) {
+              local.push({
+                id: row.id,
+                schoolId: row.school_id,
+                classId: row.class_id,
+                subjectId: row.subject_id,
+                teacherId: row.teacher_id || '',
+                coefficient: Number(row.coefficient),
+                maxScore: Number(row.max_score),
+                weeklyHours: Number(row.weekly_hours),
+                locked: true,
+              });
+            } else {
+              const found = local.find(
+                (cs) => cs.classId === row.class_id && cs.subjectId === row.subject_id
+              );
+              if (found) {
+                if (row.teacher_id) found.teacherId = row.teacher_id;
+                found.coefficient = Number(row.coefficient) || found.coefficient;
+                found.maxScore = Number(row.max_score) || found.maxScore;
+                found.weeklyHours = Number(row.weekly_hours) || found.weeklyHours;
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn('[Supabase] fallback for getClassSubjects:', err.message);
+      }
+    }
+    return local;
+  },
+
+  async assignClassSubject(schoolId: string, data: any): Promise<ClassSubject> {
+    const local = db.assignClassSubject({
+      schoolId: schoolId || 'sch-bobokoli',
+      classId: data.classId,
+      subjectId: data.subjectId,
+      teacherId: data.teacherId || '',
+      coefficient: Number(data.coefficient) || 1,
+      maxScore: Number(data.maxScore) || 20,
+      weeklyHours: Number(data.weeklyHours) || 2,
+    });
+
+    if (supabase) {
+      try {
+        const targetSchoolId = await this.resolveSupabaseSchoolId(schoolId);
+        let targetClassId = data.classId;
+        let targetSubjectId = data.subjectId;
+
+        const isClassUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetClassId);
+        if (!isClassUuid) {
+          const { data: cFound } = await supabase.from('classes').select('id').ilike('name', `%${targetClassId.replace('cls-', '')}%`).maybeSingle();
+          if (cFound?.id) targetClassId = cFound.id;
+        }
+
+        const isSubjectUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetSubjectId);
+        if (!isSubjectUuid) {
+          const { data: sFound } = await supabase.from('subjects').select('id').ilike('code', `%${targetSubjectId.replace('sbj-', '')}%`).maybeSingle();
+          if (sFound?.id) targetSubjectId = sFound.id;
+        }
+
+        const isTeacherUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.teacherId || '');
+
+        const { data: upserted, error } = await supabase.from('class_subjects').upsert({
+          school_id: targetSchoolId,
+          class_id: targetClassId,
+          subject_id: targetSubjectId,
+          teacher_id: isTeacherUuid ? data.teacherId : null,
+          coefficient: Number(data.coefficient) || 1,
+          max_score: Number(data.maxScore) || 20,
+          weekly_hours: Number(data.weeklyHours) || 2,
+        }, { onConflict: 'class_id,subject_id' }).select().maybeSingle();
+
+        if (!error && upserted) {
+          local.id = upserted.id;
+        }
+      } catch (err: any) {
+        console.warn('[Supabase] assignClassSubject error:', err.message);
+      }
+    }
+    return local;
+  },
+
+  async deleteClassSubject(id: string): Promise<boolean> {
+    const localDeleted = db.deleteClassSubject(id);
+    if (supabase) {
+      try {
+        await supabase.from('class_subjects').delete().eq('id', id);
+      } catch (err: any) {
+        console.warn('[Supabase] deleteClassSubject error:', err.message);
+      }
+    }
+    return localDeleted;
   },
 
   // 5. Élèves
@@ -1261,7 +1450,39 @@ export const dataService = {
 
   // 15. Enseignants (Teachers)
   async getTeachers(schoolId: string): Promise<Teacher[]> {
-    return db.getTeachers(schoolId);
+    const local = db.getTeachers(schoolId);
+    if (supabase) {
+      try {
+        const { data: profs, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('role', 'enseignant');
+
+        if (!error && profs && profs.length > 0) {
+          const localNames = new Set(local.map((t) => t.fullName.toLowerCase().trim()));
+          const localIds = new Set(local.map((t) => t.id));
+
+          for (const p of profs) {
+            if (!localIds.has(p.id) && !localNames.has((p.full_name || '').toLowerCase().trim())) {
+              local.push({
+                id: p.id,
+                schoolId: p.school_id || schoolId || 'sch-bobokoli',
+                matricule: `ENS-${p.id.slice(0, 6).toUpperCase()}`,
+                fullName: p.full_name || 'Professeur',
+                phone: p.phone || '',
+                email: `${(p.full_name || 'prof').toLowerCase().replace(/\s+/g, '.')}@edukin.cd`,
+                specialty: 'Enseignement Général & Spécialités',
+                assignedClasses: [],
+                active: p.active ?? true,
+              });
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn('[Supabase] getTeachers fallback:', err.message);
+      }
+    }
+    return local;
   },
 
   async createTeacher(schoolId: string, data: any): Promise<Teacher> {
@@ -1340,6 +1561,9 @@ export const dataService = {
   async createUserAccount(schoolId: string, accountData: any): Promise<UserAccount> {
     const validRoles = [
       'super_admin',
+      'cadre_securite',
+      'cadre_finances',
+      'cadre_support',
       'directeur',
       'admin_scolaire',
       'directeur_etudes',

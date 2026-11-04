@@ -99,11 +99,35 @@ export const DEFAULT_DEMO_ACCOUNTS: DemoAccount[] = [
   },
   {
     role: 'super_admin',
-    label: 'Super Administrateur (Entreprise Masomo)',
+    label: 'Super Administrateur Principal (Entreprise EduKin)',
     identifier: 'admin@edukin.cd',
     defaultPassword: 'admin123',
-    schoolName: 'Direction Nationale Masomo RDC',
-    description: 'Gestion globale des écoles partenaires et création des comptes directeurs',
+    schoolName: 'Direction Nationale EduKin RDC',
+    description: 'Gestion globale des écoles partenaires, forfaits et création des comptes',
+  },
+  {
+    role: 'cadre_securite',
+    label: 'Sécurité & Conformité (Entreprise EduKin)',
+    identifier: 'securite@edukin.cd',
+    defaultPassword: 'admin123',
+    schoolName: 'Direction Nationale EduKin RDC',
+    description: 'Gestion des accès, conformité légale et surveillance des journaux d’audit',
+  },
+  {
+    role: 'cadre_finances',
+    label: 'Finances & Facturation (Entreprise EduKin)',
+    identifier: 'finances@edukin.cd',
+    defaultPassword: 'admin123',
+    schoolName: 'Direction Nationale EduKin RDC',
+    description: 'Suivi des abonnements, transactions Mobile Money et comptabilité plateforme',
+  },
+  {
+    role: 'cadre_support',
+    label: 'Support & Intégration (Entreprise EduKin)',
+    identifier: 'support@edukin.cd',
+    defaultPassword: 'admin123',
+    schoolName: 'Direction Nationale EduKin RDC',
+    description: 'Création manuelle d’établissements après réception des documents légaux justificatifs',
   },
 ];
 
@@ -174,6 +198,96 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
   const [demoAccounts, setDemoAccounts] = useState<DemoAccount[]>(DEFAULT_DEMO_ACCOUNTS);
   const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
   const [demoFilterRole, setDemoFilterRole] = useState<string>('all');
+
+  // Password Recovery Modal Flow (Secured via E-mail)
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+  const [forgotStep, setForgotStep] = useState<1 | 2>(1);
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
+  const [forgotCode, setForgotCode] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMsg, setForgotMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Google 1-Click Sign-In
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'directeur@bobokoli.cd',
+          fullName: 'Direction Générale (Google)',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.user) {
+        throw new Error(data.error || 'Erreur lors de la synchronisation avec Google');
+      }
+      localStorage.setItem('edukin_session', JSON.stringify(data.user));
+      onLoginSuccess(data.user);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Impossible de se connecter avec Google.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRequestReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotIdentifier.trim()) return;
+    setForgotLoading(true);
+    setForgotMsg(null);
+    try {
+      const res = await fetch('/api/auth/reset-password-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailOrUsername: forgotIdentifier.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur lors de la demande de réinitialisation');
+      setForgotMsg({
+        type: 'success',
+        text: `${data.message} ${data.code ? `(Code de sécurité : ${data.code})` : ''}`,
+      });
+      if (data.code) setForgotCode(data.code);
+      setForgotStep(2);
+    } catch (err: any) {
+      setForgotMsg({ type: 'error', text: err.message });
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleConfirmReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotCode.trim() || !forgotNewPassword.trim()) return;
+    setForgotLoading(true);
+    setForgotMsg(null);
+    try {
+      const res = await fetch('/api/auth/reset-password-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          emailOrUsername: forgotIdentifier.trim(),
+          code: forgotCode.trim(),
+          newPassword: forgotNewPassword.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Code invalide ou expiré');
+      setSuccessMessage('Mot de passe réinitialisé avec succès ! Vous pouvez maintenant vous connecter.');
+      setIsForgotModalOpen(false);
+      setPassword(forgotNewPassword.trim());
+      setUsername(forgotIdentifier.trim());
+      setForgotStep(1);
+    } catch (err: any) {
+      setForgotMsg({ type: 'error', text: err.message });
+    } finally {
+      setForgotLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetch('/api/auth/demo-accounts')
@@ -454,6 +568,22 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
               </button>
             </div>
 
+            {/* Forgot password link */}
+            <div className="flex justify-end pt-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotIdentifier(username || email);
+                  setForgotMsg(null);
+                  setForgotStep(1);
+                  setIsForgotModalOpen(true);
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline focus:outline-none"
+              >
+                Mot de passe oublié ?
+              </button>
+            </div>
+
             {/* Field 3: Confirm password (only if signup mode) */}
             {mode === 'signup' && (
               <div className="relative flex items-center bg-[#f0f2ef] rounded-2xl px-4 py-3.5 transition-colors focus-within:bg-[#e9ede8] focus-within:ring-1 focus-within:ring-[#5f7a63]">
@@ -482,18 +612,34 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
                 <span>{mode === 'signup' ? 'Valider l’accès' : 'Se connecter'}</span>
               )}
             </button>
+
+            {/* Google 1-Click Sign-in button */}
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={isLoading}
+              className="w-full py-3 px-4 rounded-2xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-800 text-xs font-semibold shadow-sm transition-all flex items-center justify-center gap-3 cursor-pointer"
+            >
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.665-5.17 3.665-9.12z" />
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.13C3.27 21.41 7.33 24 12 24z" />
+                <path fill="#FBBC05" d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.13z" />
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.27 2.59 1.25 6.58l4.03 3.13c.95-2.83 3.6-4.96 6.72-4.96z" />
+              </svg>
+              <span>Se connecter via Google (1-clic)</span>
+            </button>
           </form>
 
           {/* Divider with "or" */}
-          <div className="flex items-center my-5">
+          <div className="flex items-center my-4">
             <div className="flex-grow border-t border-stone-300" />
-            <span className="px-3 text-sm text-stone-400 font-serif italic">
-              or
+            <span className="px-3 text-xs text-stone-400 font-serif italic">
+              ou
             </span>
             <div className="flex-grow border-t border-stone-300" />
           </div>
 
-          {/* Social Icons row (Facebook, Apple, Google) matching screenshot */}
+          {/* Social Icons row (Facebook, Apple, Google) */}
           <div className="flex items-center justify-center gap-8 text-stone-800">
             {/* Facebook */}
             <button
@@ -523,12 +669,10 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
               </svg>
             </button>
 
-            {/* Google */}
+            {/* Google Icon */}
             <button
               type="button"
-              onClick={() => {
-                setErrorMessage("Connexion Google Workspace disponible pour les comptes @ecole.cd.");
-              }}
+              onClick={handleGoogleSignIn}
               className="w-10 h-10 flex items-center justify-center hover:opacity-75 transition-opacity"
               aria-label="Sign in with Google"
             >
@@ -541,7 +685,6 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
             </button>
           </div>
 
-          {/* Bottom Switcher: "Already have an account? Sign in" */}
           {/* Bottom Switcher */}
           <div className="text-center pt-2 pb-4">
             {mode === 'signup' ? (
@@ -577,6 +720,161 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
         </div>
       </div>
 
+      {/* MODAL: Password Recovery (Récupération sécurisée par e-mail) */}
+      {isForgotModalOpen && (
+        <div className="fixed inset-0 z-50 bg-stone-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div>
+                <h3 className="font-semibold text-base text-stone-900 flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-blue-600" />
+                  Récupération de mot de passe
+                </h3>
+                <p className="text-xs text-stone-500">
+                  {forgotStep === 1
+                    ? 'Étape 1 : Saisissez votre identifiant ou adresse e-mail'
+                    : 'Étape 2 : Entrez le code de vérification reçu et votre nouveau mot de passe'}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsForgotModalOpen(false);
+                  setForgotMsg(null);
+                  setForgotStep(1);
+                }}
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {forgotMsg && (
+              <div
+                className={`p-3 rounded-xl text-xs flex items-start gap-2 ${
+                  forgotMsg.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}
+              >
+                {forgotMsg.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                )}
+                <span>{forgotMsg.text}</span>
+              </div>
+            )}
+
+            {forgotStep === 1 ? (
+              <form onSubmit={handleRequestReset} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Identifiant de connexion ou E-mail officiel :
+                  </label>
+                  <div className="relative flex items-center bg-[#f0f2ef] rounded-xl px-4 py-3">
+                    <User className="w-4 h-4 text-stone-500 mr-2 shrink-0" />
+                    <input
+                      type="text"
+                      value={forgotIdentifier}
+                      onChange={(e) => setForgotIdentifier(e.target.value)}
+                      placeholder="ex: prof.kalambayi@bobokoli.cd ou BOB-2026-0041"
+                      required
+                      className="w-full bg-transparent text-sm focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsForgotModalOpen(false)}
+                    className="px-4 py-2 text-xs font-medium text-stone-600 hover:bg-stone-100 rounded-xl"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {forgotLoading ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Mail className="w-4 h-4" />
+                        Envoyer le code par e-mail
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleConfirmReset} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Code de vérification à 6 chiffres :
+                  </label>
+                  <div className="relative flex items-center bg-[#f0f2ef] rounded-xl px-4 py-3">
+                    <Lock className="w-4 h-4 text-stone-500 mr-2 shrink-0" />
+                    <input
+                      type="text"
+                      value={forgotCode}
+                      onChange={(e) => setForgotCode(e.target.value)}
+                      placeholder="Code à 6 chiffres (ex: 384912)"
+                      required
+                      maxLength={6}
+                      className="w-full bg-transparent text-sm tracking-widest font-mono font-bold focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Nouveau mot de passe :
+                  </label>
+                  <div className="relative flex items-center bg-[#f0f2ef] rounded-xl px-4 py-3">
+                    <Lock className="w-4 h-4 text-stone-500 mr-2 shrink-0" />
+                    <input
+                      type="password"
+                      value={forgotNewPassword}
+                      onChange={(e) => setForgotNewPassword(e.target.value)}
+                      placeholder="Minimum 6 caractères"
+                      required
+                      minLength={4}
+                      className="w-full bg-transparent text-sm focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setForgotStep(1)}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    ← Modifier l'adresse e-mail
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {forgotLoading ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        Réinitialiser le mot de passe
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Quick Role Tester Slide-over/Modal */}
       {isDemoModalOpen && (
         <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center p-4">
@@ -600,7 +898,7 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
 
             {/* Filter pills */}
             <div className="flex items-center gap-1.5 overflow-x-auto py-1 text-xs">
-              {['all', 'direction', 'eleve', 'parent', 'enseignant'].map((rf) => (
+              {['all', 'direction', 'entreprise', 'eleve', 'parent', 'enseignant'].map((rf) => (
                 <button
                   key={rf}
                   onClick={() => setDemoFilterRole(rf)}
@@ -646,7 +944,7 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
 
       {/* Discreet bottom footer */}
       <footer className="w-full border-t border-stone-100 py-3 text-center text-xs text-stone-400">
-        Masomo RDC • Système de gestion scolaire certifié EPST
+        EduKin RDC • Système de gestion scolaire certifié EPST
       </footer>
     </div>
   );

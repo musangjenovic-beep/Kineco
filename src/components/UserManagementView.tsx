@@ -268,6 +268,9 @@ export const UserManagementView = ({
 
   const roleBadges: Record<UserRole, { label: string; color: string }> = {
     super_admin: { label: 'Super Admin (Entreprise)', color: 'bg-purple-100 text-purple-800 border-purple-200' },
+    cadre_securite: { label: 'Sécurité & Conformité', color: 'bg-red-100 text-red-800 border-red-200' },
+    cadre_finances: { label: 'Finances & Facturation', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+    cadre_support: { label: 'Support & Intégration', color: 'bg-amber-100 text-amber-800 border-amber-200' },
     directeur: { label: 'Directeur Général', color: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
     directeur_etudes: { label: 'Directeur des Études', color: 'bg-teal-100 text-teal-800 border-teal-200' },
     directeur_discipline: { label: 'Directeur de Discipline', color: 'bg-amber-100 text-amber-800 border-amber-200' },

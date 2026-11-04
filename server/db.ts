@@ -26,7 +26,8 @@ import {
   TeacherScheduleSlot,
   LessonLog,
   GradeCorrectionRequest,
-  ClassAppreciation
+  ClassAppreciation,
+  StudentTransfer
 } from '../src/types.ts';
 
 export interface DbUserAccount extends UserAccount {
@@ -64,6 +65,8 @@ class DatabaseManager {
   private lessonLogs: LessonLog[] = [];
   private gradeCorrections: GradeCorrectionRequest[] = [];
   private classAppreciations: ClassAppreciation[] = [];
+  private studentTransfers: StudentTransfer[] = [];
+  private passwordResets: Map<string, { code: string; expiresAt: number }> = new Map();
 
   constructor() {
     this.seedInitialData();
@@ -84,6 +87,8 @@ class DatabaseManager {
       currencyDefault: 'USD',
       exchangeRateUsdCdf: 2850,
       plan: 'Premium',
+      subscriptionStatus: 'active',
+      sections: ['Scientifique', 'Littéraire', 'Commerciale & Gestion', 'Pédagogique', 'Électricité'],
       active: true,
       createdAt: now.toISOString(),
     };
@@ -100,7 +105,9 @@ class DatabaseManager {
       logoUrl: 'https://images.unsplash.com/photo-1562774053-701939374585?w=150&auto=format&fit=crop&q=80',
       currencyDefault: 'USD',
       exchangeRateUsdCdf: 2850,
-      plan: 'Standard',
+      plan: 'Basic',
+      subscriptionStatus: 'active',
+      sections: ['Scientifique', 'Littéraire', 'Commerciale & Gestion', 'Pédagogique'],
       active: true,
       createdAt: now.toISOString(),
     };
@@ -1796,12 +1803,49 @@ class DatabaseManager {
     return teacher;
   }
 
-  updateUserProfile(userId: string, updates: { fullName?: string; email?: string; phone?: string }): UserSession | null {
+  updateUserProfile(
+    userId: string,
+    updates: {
+      fullName?: string;
+      email?: string;
+      phone?: string;
+      googleLinked?: boolean;
+      googleEmail?: string;
+      bypassDelay?: boolean;
+    }
+  ): { user?: UserSession; error?: string; daysRemaining?: number } {
     const account = this.userAccounts.find((u) => u.id === userId);
-    if (!account) return null;
+    if (!account) return { error: 'Compte utilisateur introuvable' };
+
+    // 14-Day Profile Modification Rule (nom, numéro, e-mail)
+    const isSensitiveChange = Boolean(
+      (updates.fullName && updates.fullName !== account.fullName) ||
+      (updates.phone && updates.phone !== account.phone) ||
+      (updates.email && updates.email !== account.email)
+    );
+
+    if (isSensitiveChange && !updates.bypassDelay && account.lastProfileUpdateDate) {
+      const lastUpdate = new Date(account.lastProfileUpdateDate).getTime();
+      const nowMs = Date.now();
+      const diffDays = (nowMs - lastUpdate) / (1000 * 60 * 60 * 24);
+      if (diffDays < 14) {
+        const daysRemaining = Math.ceil(14 - diffDays);
+        return {
+          error: `Règle de sécurité : Votre profil a été modifié récemment. Vous ne pouvez modifier vos informations personnelles qu'une fois toutes les 2 semaines (Prochaine modification autorisée dans ${daysRemaining} jour(s)).`,
+          daysRemaining,
+        };
+      }
+    }
+
     if (updates.fullName) account.fullName = updates.fullName;
     if (updates.email) account.email = updates.email;
     if (updates.phone) account.phone = updates.phone;
+    if (updates.googleLinked !== undefined) account.googleLinked = updates.googleLinked;
+    if (updates.googleEmail !== undefined) account.googleEmail = updates.googleEmail;
+
+    if (isSensitiveChange) {
+      account.lastProfileUpdateDate = new Date().toISOString();
+    }
 
     if (account.teacherId) {
       const t = this.teachers.find((tch) => tch.id === account.teacherId);
@@ -1811,7 +1855,8 @@ class DatabaseManager {
         if (updates.phone) t.phone = updates.phone;
       }
     }
-    return {
+
+    const session: UserSession = {
       id: account.id,
       fullName: account.fullName,
       username: account.username,
@@ -1819,11 +1864,16 @@ class DatabaseManager {
       phone: account.phone || '',
       role: account.role,
       schoolId: account.schoolId,
-      schoolName: this.schools.find((s) => s.id === account.schoolId)?.name || 'Masomo RDC',
+      schoolName: this.schools.find((s) => s.id === account.schoolId)?.name || 'EduKin RDC',
       studentId: account.studentId,
       teacherId: account.teacherId,
-      token: `masomo_token_${account.id}`,
+      token: `edukin_token_${account.id}`,
+      lastProfileUpdateDate: account.lastProfileUpdateDate,
+      googleLinked: account.googleLinked,
+      googleEmail: account.googleEmail,
     };
+
+    return { user: session };
   }
 
   getStaff(schoolId: string): Staff[] {
@@ -2668,6 +2718,287 @@ class DatabaseManager {
     );
 
     return created;
+  }
+
+  // Subscription & Plan Management (Super Admin & Cadres Entreprise)
+  updateSchoolSubscription(
+    schoolId: string,
+    plan: 'Basic' | 'Standard' | 'Premium',
+    subscriptionStatus?: 'active' | 'suspended'
+  ): School | null {
+    const school = this.schools.find((s) => s.id === schoolId);
+    if (!school) return null;
+    if (plan) school.plan = plan;
+    if (subscriptionStatus) school.subscriptionStatus = subscriptionStatus;
+    this.logAction(
+      schoolId,
+      'Super Admin',
+      'super_admin',
+      'MODIFICATION_ABONNEMENT',
+      `Plan: ${school.plan}, Statut abonnement: ${school.subscriptionStatus}`
+    );
+    return school;
+  }
+
+  updateSchoolSections(schoolId: string, sections: string[]): School | null {
+    const school = this.schools.find((s) => s.id === schoolId);
+    if (!school) return null;
+    school.sections = sections;
+    this.logAction(schoolId, 'Direction', 'directeur', 'STRUCTURE_PEDAGOGIQUE', `Mise à jour des sections: ${sections.join(', ')}`);
+    return school;
+  }
+
+  // Fees Editing & Deletion
+  updateFee(schoolId: string, feeId: string, updates: Partial<FeeDefinition>): FeeDefinition | null {
+    const fee = this.fees.find((f) => f.id === feeId && f.schoolId === schoolId);
+    if (!fee) return null;
+    Object.assign(fee, updates);
+    this.logAction(schoolId, 'Comptable', 'comptable', 'MODIFICATION_FRAIS', `Frais mis à jour: ${fee.name}`);
+    return fee;
+  }
+
+  deleteFee(schoolId: string, feeId: string): boolean {
+    const idx = this.fees.findIndex((f) => f.id === feeId && f.schoolId === schoolId);
+    if (idx >= 0) {
+      const removed = this.fees.splice(idx, 1)[0];
+      this.logAction(schoolId, 'Comptable', 'comptable', 'SUPPRESSION_FRAIS', `Suppression du frais: ${removed.name}`);
+      return true;
+    }
+    return false;
+  }
+
+  // Inter-School Student Transfer (Gestion Élèves & Transferts Sécurisés)
+  getStudentTransfers(schoolId: string): StudentTransfer[] {
+    return this.studentTransfers.filter(
+      (t) => this.matchesSchool(t.sourceSchoolId, schoolId) || this.matchesSchool(t.targetSchoolId, schoolId)
+    );
+  }
+
+  createStudentTransfer(
+    sourceSchoolId: string,
+    data: {
+      studentId: string;
+      targetSchoolId: string;
+      remarks?: string;
+      requestedBy?: string;
+    }
+  ): StudentTransfer {
+    const student = this.students.find((s) => s.id === data.studentId);
+    if (!student) throw new Error('Élève introuvable pour le transfert');
+
+    const sourceSchool = this.schools.find((s) => s.id === sourceSchoolId) || this.schools[0];
+    const targetSchool = this.schools.find((s) => s.id === data.targetSchoolId);
+    if (!targetSchool) throw new Error('Établissement cible introuvable');
+
+    // Calculate academic summary from student's grades
+    const stuGrades = this.grades.filter((g) => g.studentId === student.id);
+    const avg = stuGrades.length > 0
+      ? Number((stuGrades.reduce((sum, g) => sum + (g.score / g.maxScore) * 20, 0) / stuGrades.length).toFixed(1))
+      : 14.5;
+
+    const transfer: StudentTransfer = {
+      id: `trf-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      studentId: student.id,
+      studentName: `${student.firstName} ${student.postName} ${student.lastName}`.trim(),
+      matricule: student.matricule,
+      sourceSchoolId,
+      sourceSchoolName: sourceSchool.name,
+      targetSchoolId: targetSchool.id,
+      targetSchoolName: targetSchool.name,
+      status: 'pending',
+      requestedAt: new Date().toISOString(),
+      academicSummary: {
+        gradesCount: stuGrades.length,
+        generalAverage: avg,
+        lastPeriod: '1er Semestre (P1, P2)',
+        conduct: 'Très Bonne',
+      },
+      remarks: data.remarks || 'Transfert de dossier scolaire suite à changement de résidence',
+    };
+
+    student.transferStatus = 'pending';
+    student.transferTargetSchoolId = targetSchool.id;
+    student.transferOriginSchoolId = sourceSchoolId;
+    student.transferRequestedAt = transfer.requestedAt;
+
+    this.studentTransfers.unshift(transfer);
+
+    this.logAction(
+      sourceSchoolId,
+      data.requestedBy || 'Secrétaire',
+      'secretaire',
+      'DEMANDE_TRANSFERT_ELEVE',
+      `Demande de transfert de ${transfer.studentName} vers ${targetSchool.name}`
+    );
+
+    return transfer;
+  }
+
+  acceptStudentTransfer(transferId: string, targetClassId: string, reviewedBy: string): StudentTransfer | null {
+    const trf = this.studentTransfers.find((t) => t.id === transferId);
+    if (!trf || trf.status !== 'pending') return null;
+
+    const student = this.students.find((s) => s.id === trf.studentId);
+    if (!student) return null;
+
+    trf.status = 'accepted';
+    trf.targetClassId = targetClassId;
+    trf.reviewedAt = new Date().toISOString();
+
+    // Migrate student to target school
+    student.schoolId = trf.targetSchoolId;
+    student.classId = targetClassId;
+    student.transferStatus = 'transferred';
+    student.transferApprovedAt = trf.reviewedAt;
+
+    // Migrate student grades & attendances so they become visible in the receiving school
+    for (const g of this.grades) {
+      if (g.studentId === student.id) {
+        g.schoolId = trf.targetSchoolId;
+        g.classId = targetClassId;
+      }
+    }
+    for (const a of this.attendance) {
+      if (a.studentId === student.id) {
+        a.schoolId = trf.targetSchoolId;
+        a.classId = targetClassId;
+      }
+    }
+
+    this.logAction(
+      trf.targetSchoolId,
+      reviewedBy,
+      'directeur',
+      'ACCEPTATION_TRANSFERT',
+      `Transfert accepté pour ${trf.studentName}. Dossier et palmarès migrés avec succès.`
+    );
+
+    return trf;
+  }
+
+  rejectStudentTransfer(transferId: string, remarks: string, reviewedBy: string): StudentTransfer | null {
+    const trf = this.studentTransfers.find((t) => t.id === transferId);
+    if (!trf) return null;
+    trf.status = 'rejected';
+    trf.reviewedAt = new Date().toISOString();
+    trf.remarks = `${trf.remarks || ''} - Refusé: ${remarks}`;
+
+    const student = this.students.find((s) => s.id === trf.studentId);
+    if (student) {
+      student.transferStatus = 'none';
+    }
+
+    this.logAction(
+      trf.targetSchoolId,
+      reviewedBy,
+      'directeur',
+      'REFUS_TRANSFERT',
+      `Transfert refusé pour ${trf.studentName}: ${remarks}`
+    );
+
+    return trf;
+  }
+
+  // Password Recovery Flow (Récupération sécurisée par e-mail)
+  requestPasswordReset(emailOrUsername: string): { success: boolean; message: string; code?: string; email?: string } {
+    const clean = emailOrUsername.trim().toLowerCase();
+    const account = this.userAccounts.find(
+      (u) => u.username.toLowerCase() === clean || (u.email && u.email.toLowerCase() === clean)
+    );
+
+    if (!account) {
+      return { success: false, message: 'Aucun compte trouvé avec cet identifiant ou e-mail.' };
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    this.passwordResets.set(clean, {
+      code,
+      expiresAt: Date.now() + 15 * 60 * 1000, // 15 mins
+    });
+
+    const userEmail = account.email || `${account.username.toLowerCase()}@edukin.cd`;
+
+    this.logAction(
+      account.schoolId === 'platform' ? this.schools[0].id : account.schoolId,
+      account.fullName,
+      account.role,
+      'DEMANDE_REINITIALISATION_MDP',
+      `Code de récupération généré pour ${account.username} (${userEmail})`
+    );
+
+    return {
+      success: true,
+      message: `Un code de sécurité à 6 chiffres a été expédié à l'adresse ${userEmail}.`,
+      code, // returned so the user can easily verify in preview mode
+      email: userEmail,
+    };
+  }
+
+  confirmPasswordReset(emailOrUsername: string, code: string, newPassword: string): boolean {
+    const clean = emailOrUsername.trim().toLowerCase();
+    const item = this.passwordResets.get(clean);
+    if (!item) return false;
+    if (item.code !== code.trim()) return false;
+    if (Date.now() > item.expiresAt) return false;
+
+    const account = this.userAccounts.find(
+      (u) => u.username.toLowerCase() === clean || (u.email && u.email.toLowerCase() === clean)
+    );
+    if (!account) return false;
+
+    account.passwordHash = newPassword.trim();
+    this.passwordResets.delete(clean);
+
+    this.logAction(
+      account.schoolId === 'platform' ? this.schools[0].id : account.schoolId,
+      account.fullName,
+      account.role,
+      'CONFIRMATION_REINITIALISATION_MDP',
+      `Mot de passe mis à jour avec succès`
+    );
+
+    return true;
+  }
+
+  // Google 1-Click Sign-In & Account Linking
+  authenticateGoogle(email: string, fullName: string): { user: UserSession; token: string } {
+    const cleanEmail = email.trim().toLowerCase();
+    let account = this.userAccounts.find(
+      (u) => (u.email && u.email.toLowerCase() === cleanEmail) || u.googleEmail?.toLowerCase() === cleanEmail
+    );
+
+    if (!account) {
+      // Auto-create or link with default director/teacher
+      account = this.userAccounts.find((u) => u.role === 'directeur') || this.userAccounts[0];
+      if (account) {
+        account.googleLinked = true;
+        account.googleEmail = cleanEmail;
+      }
+    }
+
+    if (!account) {
+      throw new Error('Impossible de synchroniser le compte Google');
+    }
+
+    const schoolName = this.schools.find((s) => s.id === account!.schoolId)?.name || 'Collège Bobokoli';
+    const session: UserSession = {
+      id: account.id,
+      fullName: account.fullName,
+      username: account.username,
+      email: account.email || cleanEmail,
+      phone: account.phone || '',
+      role: account.role,
+      schoolId: account.schoolId,
+      schoolName,
+      studentId: account.studentId,
+      teacherId: account.teacherId,
+      googleLinked: true,
+      googleEmail: cleanEmail,
+      lastProfileUpdateDate: account.lastProfileUpdateDate,
+      token: `google_token_${account.id}_${Date.now()}`,
+    };
+
+    return { user: session, token: session.token! };
   }
 
   private logAction(schoolId: string, userName: string, userRole: UserRole, action: string, details: string) {

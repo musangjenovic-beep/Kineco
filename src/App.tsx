@@ -18,6 +18,7 @@ import {
   UserRole,
   BulletinData,
   UserSession,
+  ClassSubject,
 } from './types';
 
 import { Header, TeacherTabType } from './components/Header';
@@ -92,6 +93,7 @@ export default function App() {
   const [students, setStudents] = useState<Student[]>(DEFAULT_STUDENTS);
   const [classes, setClasses] = useState<SchoolClass[]>(DEFAULT_CLASSES);
   const [subjects, setSubjects] = useState<Subject[]>(DEFAULT_SUBJECTS);
+  const [classSubjects, setClassSubjects] = useState<ClassSubject[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>(DEFAULT_TEACHERS);
   const [parents, setParents] = useState<Parent[]>([]);
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>(DEFAULT_ACADEMIC_YEARS);
@@ -272,6 +274,7 @@ export default function App() {
       safeFetchJson(`/api/incidents?schoolId=${sid}`),
       safeFetchJson(`/api/announcements?schoolId=${sid}`),
       safeFetchJson(`/api/sms-logs?schoolId=${sid}`),
+      safeFetchJson(`/api/class-subjects?schoolId=${sid}`),
     ])
       .then(
         ([
@@ -289,6 +292,7 @@ export default function App() {
           incs,
           ancs,
           smsl,
+          clssubs,
         ]) => {
           if (Array.isArray(studs) && studs.length > 0) setStudents(studs);
           if (Array.isArray(cls) && cls.length > 0) setClasses(cls);
@@ -304,6 +308,7 @@ export default function App() {
           if (Array.isArray(incs) && incs.length > 0) setIncidents(incs);
           if (Array.isArray(ancs) && ancs.length > 0) setAnnouncements(ancs);
           if (Array.isArray(smsl) && smsl.length > 0) setSmsLogs(smsl);
+          if (Array.isArray(clssubs) && clssubs.length > 0) setClassSubjects(clssubs);
           setIsLoading(false);
         }
       )
@@ -336,6 +341,23 @@ export default function App() {
     setClasses((prev) => [...prev, created]);
   };
 
+  const handleAddStudent = async (studentData: Partial<Student>) => {
+    if (!currentSchool) return;
+    const res = await fetch('/api/students', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...studentData,
+        schoolId: currentSchool.id,
+      }),
+    });
+    if (res.ok) {
+      const created = await res.json();
+      setStudents((prev) => [...prev, created]);
+      return created;
+    }
+  };
+
   const handleAssignTitulaire = async (classId: string, teacherId: string) => {
     if (!currentSchool) return;
     const res = await fetch(`/api/classes/${classId}/titulaire`, {
@@ -353,10 +375,17 @@ export default function App() {
     }
   };
 
-  const handleAssignCourse = async (classId: string, subjectId: string, teacherId: string) => {
+  const handleAssignCourse = async (
+    classId: string,
+    subjectId: string,
+    teacherId: string,
+    coefficient = 1,
+    maxScore = 20,
+    weeklyHours = 2
+  ) => {
     if (!currentSchool) return;
     try {
-      await fetch('/api/class-subjects', {
+      const res = await fetch('/api/class-subjects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -364,10 +393,36 @@ export default function App() {
           classId,
           subjectId,
           teacherId,
+          coefficient,
+          maxScore,
+          weeklyHours,
         }),
       });
+      if (res.ok) {
+        const saved = await res.json();
+        setClassSubjects((prev) => {
+          const idx = prev.findIndex((cs) => cs.classId === classId && cs.subjectId === subjectId);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = saved;
+            return next;
+          }
+          return [...prev, saved];
+        });
+      }
     } catch (err) {
       console.warn('Class subject assignment fallback:', err);
+    }
+  };
+
+  const handleDeleteClassSubject = async (classSubjectId: string) => {
+    try {
+      const res = await fetch(`/api/class-subjects/${classSubjectId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setClassSubjects((prev) => prev.filter((cs) => cs.id !== classSubjectId));
+      }
+    } catch (err) {
+      console.warn('Failed to delete class subject:', err);
     }
   };
 
@@ -591,6 +646,25 @@ export default function App() {
     setFees((prev) => [...prev, created]);
   };
 
+  const handleUpdateFee = async (id: string, updates: Partial<FeeDefinition>) => {
+    const res = await fetch(`/api/fees/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setFees((prev) => prev.map((f) => (f.id === id ? updated : f)));
+    }
+  };
+
+  const handleDeleteFee = async (id: string) => {
+    const res = await fetch(`/api/fees/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setFees((prev) => prev.filter((f) => f.id !== id));
+    }
+  };
+
   const handleAddIncident = async (
     data: Omit<DisciplineIncident, 'id' | 'schoolId' | 'recordedAt'>
   ) => {
@@ -766,14 +840,16 @@ export default function App() {
               />
             ) : (
               <>
-                {/* SUPER ADMIN ROLE */}
-                {currentRole === 'super_admin' && (
+                {/* SUPER ADMIN & CADRES ENTREPRISE */}
+                {['super_admin', 'cadre_securite', 'cadre_finances', 'cadre_support'].includes(currentRole) && (
                   <SuperAdminView
                     schools={schools}
                     onOpenNewSchoolModal={() => setIsNewSchoolModalOpen(true)}
                     onSelectSchool={(school) => setCurrentSchool(school)}
                     currentSchool={currentSchool}
                     onOpenUserManagement={() => setIsUserManagementOpen(true)}
+                    currentUserRole={currentRole}
+                    onUpdateSchool={(updated) => setCurrentSchool(updated)}
                   />
                 )}
 
@@ -799,6 +875,7 @@ export default function App() {
                 {currentRole === 'admin_scolaire' && (
                   <AdminScolaireView
                     school={currentSchool}
+                    schools={schools}
                     classes={classes}
                     subjects={subjects}
                     teachers={teachers}
@@ -811,6 +888,7 @@ export default function App() {
                     onAddPeriod={handleAddPeriod}
                     onUpdateSchoolSettings={handleUpdateSchoolSettings}
                     onAssignTitulaire={handleAssignTitulaire}
+                    onAddStudent={handleAddStudent}
                   />
                 )}
 
@@ -824,8 +902,12 @@ export default function App() {
                     teachers={teachers}
                     grades={grades}
                     academicPeriods={academicPeriods}
+                    classSubjects={classSubjects}
                     onOpenBulletin={(stuId) => setBulletinStudentId(stuId)}
                     onAssignCourse={handleAssignCourse}
+                    onDeleteClassSubject={handleDeleteClassSubject}
+                    onAddSubject={handleAddSubject}
+                    onAssignTitulaire={handleAssignTitulaire}
                   />
                 )}
 
@@ -834,6 +916,7 @@ export default function App() {
                   <DisciplineView
                     school={currentSchool}
                     students={students}
+                    classes={classes}
                     incidents={incidents}
                     attendance={attendance}
                     onAddIncident={handleAddIncident}
@@ -853,6 +936,8 @@ export default function App() {
                     payments={payments}
                     onRecordPayment={handleRecordPayment}
                     onAddFee={handleAddFee}
+                    onUpdateFee={handleUpdateFee}
+                    onDeleteFee={handleDeleteFee}
                     onOpenReceiptModal={(pmt, stu) => {
                       setReceiptModalPayment(pmt);
                       setReceiptModalStudent(stu);

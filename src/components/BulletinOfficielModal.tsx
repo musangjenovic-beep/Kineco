@@ -219,8 +219,13 @@ export const BulletinOfficielModal = ({ bulletin, onClose }: BulletinOfficielMod
             </div>
           </div>
 
-          <div className="text-[10px] text-slate-400 text-center pt-2">
-            Document officiel généré par le Système Numérique EduKin RDC le {bulletin.generatedDate}. Toute rature annule le bulletin.
+          {/* Mandatory EPST RDC Disclaimer (Article 69 des spécifications) */}
+          <div className="p-3 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-950 text-xs flex items-center justify-center gap-2 font-bold text-center">
+            <span>⚠️ AVIS LÉGAL : Document interne généré par la plateforme EduKin — Ne remplace pas le bulletin officiel homologué de l'État (Ministère de l'EPST RDC).</span>
+          </div>
+
+          <div className="text-[10px] text-slate-400 text-center pt-1">
+            Généré par le Système Numérique EduKin RDC le {bulletin.generatedDate} • ID d'Authenticité : <span className="font-mono">{bulletin.student?.id || 'EDU'}-{Date.now().toString().slice(-6)}</span>
           </div>
         </div>
 

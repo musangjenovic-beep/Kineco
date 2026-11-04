@@ -114,6 +114,21 @@ checkSupabaseConnection().then(async (status) => {
     res.json(updated);
   });
 
+  app.patch('/api/schools/:id/subscription', (req: Request, res: Response) => {
+    const { plan, subscriptionStatus } = req.body;
+    const school = db.updateSchoolSubscription(req.params.id, plan, subscriptionStatus);
+    if (!school) return res.status(404).json({ error: 'Établissement non trouvé' });
+    res.json(school);
+  });
+
+  app.patch('/api/schools/:id/sections', (req: Request, res: Response) => {
+    const { sections } = req.body;
+    if (!Array.isArray(sections)) return res.status(400).json({ error: 'Liste de sections requise' });
+    const school = db.updateSchoolSections(req.params.id, sections);
+    if (!school) return res.status(404).json({ error: 'Établissement non trouvé' });
+    res.json(school);
+  });
+
   // -------------------------------------------------------------
   // AUTHENTICATION & ACCESS CONTROL
   // -------------------------------------------------------------
@@ -132,6 +147,20 @@ checkSupabaseConnection().then(async (status) => {
         });
       }
 
+      // Check for school suspension if user is not super_admin or company cadre
+      const user = authResult.user;
+      const isCompanyRole = user.role === 'super_admin' || user.role.startsWith('cadre_');
+      if (!isCompanyRole && user.schoolId && user.schoolId !== 'platform') {
+        const school = db.getSchool(user.schoolId);
+        if (school && school.subscriptionStatus === 'suspended') {
+          return res.status(403).json({
+            error: `Accès temporairement suspendu pour "${school.name}". L'abonnement annuel de l'établissement nécessite une régularisation financière auprès de la direction EduKin.`,
+            isSuspended: true,
+            schoolName: school.name,
+          });
+        }
+      }
+
       return res.json(authResult);
     } catch (err: any) {
       console.error('[Auth Error]', err);
@@ -139,6 +168,45 @@ checkSupabaseConnection().then(async (status) => {
         error: `Erreur interne lors de la connexion: ${err?.message || 'Vérifiez la connexion réseau'}`,
       });
     }
+  });
+
+  // Google 1-Click Login & Account Linking
+  app.post(['/api/auth/google', '/auth/google'], (req: Request, res: Response) => {
+    try {
+      const { email, fullName } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: 'E-mail Google requis pour la synchronisation' });
+      }
+      const result = db.authenticateGoogle(email, fullName || 'Utilisateur Google');
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Échec de la connexion via Google' });
+    }
+  });
+
+  // Password Recovery by E-mail
+  app.post(['/api/auth/reset-password-request', '/auth/reset-password-request'], (req: Request, res: Response) => {
+    const { emailOrUsername } = req.body;
+    if (!emailOrUsername) {
+      return res.status(400).json({ error: 'Identifiant ou adresse e-mail requis' });
+    }
+    const result = db.requestPasswordReset(emailOrUsername);
+    if (!result.success) {
+      return res.status(404).json({ error: result.message });
+    }
+    res.json(result);
+  });
+
+  app.post(['/api/auth/reset-password-confirm', '/auth/reset-password-confirm'], (req: Request, res: Response) => {
+    const { emailOrUsername, code, newPassword } = req.body;
+    if (!emailOrUsername || !code || !newPassword) {
+      return res.status(400).json({ error: 'Identifiant, code de sécurité et nouveau mot de passe requis' });
+    }
+    const success = db.confirmPasswordReset(emailOrUsername, code, newPassword);
+    if (!success) {
+      return res.status(400).json({ error: 'Code de sécurité invalide ou expiré (durée de validité 15 minutes)' });
+    }
+    res.json({ success: true, message: 'Votre mot de passe a été mis à jour avec succès. Vous pouvez maintenant vous connecter.' });
   });
 
   app.post(['/api/auth/logout', '/auth/logout'], (_req: Request, res: Response) => {
@@ -149,11 +217,35 @@ checkSupabaseConnection().then(async (status) => {
     res.json([
       {
         role: 'super_admin',
-        label: 'Super Administrateur (Entreprise EduKin)',
+        label: 'Super Administrateur Principal (Entreprise EduKin)',
         identifier: 'admin@edukin.cd',
         defaultPassword: 'admin123',
         schoolName: 'Direction Nationale EduKin RDC',
-        description: 'Gestion globale des écoles partenaires et création des comptes directeurs',
+        description: 'Supervision générale des établissements, forfaits Basic / Premium et gestion des accès',
+      },
+      {
+        role: 'cadre_securite',
+        label: 'Sécurité & Conformité (Entreprise EduKin)',
+        identifier: 'securite@edukin.cd',
+        defaultPassword: 'admin123',
+        schoolName: 'Direction Nationale EduKin RDC',
+        description: 'Journaux d’audit, conformité légale EPST et intégrité des données',
+      },
+      {
+        role: 'cadre_finances',
+        label: 'Finances & Facturation (Entreprise EduKin)',
+        identifier: 'finances@edukin.cd',
+        defaultPassword: 'admin123',
+        schoolName: 'Direction Nationale EduKin RDC',
+        description: 'Suivi des abonnements des écoles, Mobile Money centralisé et factures',
+      },
+      {
+        role: 'cadre_support',
+        label: 'Support & Intégration (Entreprise EduKin)',
+        identifier: 'support@edukin.cd',
+        defaultPassword: 'admin123',
+        schoolName: 'Direction Nationale EduKin RDC',
+        description: 'Création manuelle d’écoles après vérification des arrêtés d’agrément EPST',
       },
       {
         role: 'directeur',
@@ -375,46 +467,63 @@ checkSupabaseConnection().then(async (status) => {
     res.json(subjects);
   });
 
-  app.post('/api/subjects', (req: Request, res: Response) => {
-    const { schoolId, name, code, category, defaultCoefficient, defaultMaxScore } = req.body;
-    if (!name || !code) return res.status(400).json({ error: 'Nom et code requis' });
-    const newSub = db.createSubject(schoolId, {
-      name,
-      code,
-      category: category || 'Sciences',
-      defaultCoefficient: Number(defaultCoefficient) || 1,
-      defaultMaxScore: Number(defaultMaxScore) || 20,
-    });
-    res.status(201).json(newSub);
+  app.post('/api/subjects', async (req: Request, res: Response) => {
+    try {
+      const { schoolId, name, code, category, defaultCoefficient, defaultMaxScore } = req.body;
+      if (!name || !code) return res.status(400).json({ error: 'Nom et code de la matière requis' });
+      const newSub = await dataService.createSubject(schoolId || 'sch-bobokoli', {
+        name,
+        code,
+        category: category || 'Sciences',
+        defaultCoefficient: Number(defaultCoefficient) || 1,
+        defaultMaxScore: Number(defaultMaxScore) || 20,
+      });
+      res.status(201).json(newSub);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Erreur lors de la création de la matière' });
+    }
   });
 
   // Class Subjects (Attribution des cours & professeurs aux classes - 7e, 8e EB, etc.)
-  app.get('/api/class-subjects', (req: Request, res: Response) => {
-    const schoolId = (req.query.schoolId as string) || 'sch-bobokoli';
-    const classId = req.query.classId as string | undefined;
-    res.json(db.getClassSubjects(schoolId, classId));
-  });
-
-  app.post('/api/class-subjects', (req: Request, res: Response) => {
-    const { schoolId, classId, subjectId, teacherId, coefficient, maxScore, weeklyHours } = req.body;
-    if (!classId || !subjectId) {
-      return res.status(400).json({ error: 'Classe et matière obligatoires' });
+  app.get('/api/class-subjects', async (req: Request, res: Response) => {
+    try {
+      const schoolId = (req.query.schoolId as string) || 'sch-bobokoli';
+      const classId = req.query.classId as string | undefined;
+      const list = await dataService.getClassSubjects(schoolId, classId);
+      res.json(list);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Erreur lors de la récupération des attributions' });
     }
-    const created = db.assignClassSubject({
-      schoolId: schoolId || 'sch-bobokoli',
-      classId,
-      subjectId,
-      teacherId: teacherId || '',
-      coefficient: Number(coefficient) || 1,
-      maxScore: Number(maxScore) || 20,
-      weeklyHours: Number(weeklyHours) || 2,
-    });
-    res.status(201).json(created);
   });
 
-  app.delete('/api/class-subjects/:id', (req: Request, res: Response) => {
-    const deleted = db.deleteClassSubject(req.params.id);
-    res.json({ success: deleted });
+  app.post('/api/class-subjects', async (req: Request, res: Response) => {
+    try {
+      const { schoolId, classId, subjectId, teacherId, coefficient, maxScore, weeklyHours, locked } = req.body;
+      if (!classId || !subjectId) {
+        return res.status(400).json({ error: 'Classe et matière obligatoires' });
+      }
+      const created = await dataService.assignClassSubject(schoolId || 'sch-bobokoli', {
+        classId,
+        subjectId,
+        teacherId: teacherId || '',
+        coefficient: Number(coefficient) || 1,
+        maxScore: Number(maxScore) || 20,
+        weeklyHours: Number(weeklyHours) || 2,
+        locked: Boolean(locked),
+      });
+      res.status(201).json(created);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Erreur lors de l’attribution du cours' });
+    }
+  });
+
+  app.delete('/api/class-subjects/:id', async (req: Request, res: Response) => {
+    try {
+      const deleted = await dataService.deleteClassSubject(req.params.id);
+      res.json({ success: deleted });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Erreur lors de la suppression de l’attribution' });
+    }
   });
 
   // 5. Élèves
@@ -506,9 +615,12 @@ checkSupabaseConnection().then(async (status) => {
   });
 
   app.put('/api/users/:id/profile', (req: Request, res: Response) => {
-    const updated = db.updateUserProfile(req.params.id, req.body);
-    if (!updated) return res.status(404).json({ error: 'Utilisateur introuvable' });
-    res.json(updated);
+    const result = db.updateUserProfile(req.params.id, req.body);
+    if (result.error) {
+      return res.status(403).json({ error: result.error, daysRemaining: result.daysRemaining });
+    }
+    if (!result.user) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    res.json(result.user);
   });
 
   app.get('/api/staff', (req: Request, res: Response) => {
@@ -530,7 +642,33 @@ checkSupabaseConnection().then(async (status) => {
     if (!schoolId || !classId || !date || !records || !Array.isArray(records)) {
       return res.status(400).json({ error: 'Données de présence invalides' });
     }
+
+    // Midnight Lock check: past dates cannot be modified by teacher
+    const today = new Date().toISOString().split('T')[0];
+    if (date < today) {
+      return res.status(403).json({
+        error: `L'appel de la journée du ${date} est définitivement clôturé et verrouillé. Les modifications rétroactives ne sont pas permises.`,
+        isLocked: true,
+      });
+    }
+
     const saved = await dataService.saveAttendanceBatch(schoolId, classId, date, records, recordedBy || 'Enseignant');
+
+    // Instant Notification to School Direction
+    try {
+      db.createSchoolMessage(schoolId, {
+        senderName: recordedBy || 'Enseignant',
+        senderRole: 'enseignant',
+        recipientType: 'direction',
+        recipientTargetName: 'Direction de l’Établissement',
+        subject: `[Appel Journalier Effectué] Date: ${date}`,
+        body: `L'appel en classe a été clôturé par ${recordedBy || 'le professeur'}. Présences validées pour ${records.length} élève(s). Absences signalées: ${records.filter((r: any) => r.status === 'absent').length}.`,
+        smsSent: false,
+      });
+    } catch (e) {
+      console.warn('[Direction Notification]', e);
+    }
+
     res.json({ success: true, count: saved.length, records: saved });
   });
 
@@ -665,19 +803,24 @@ checkSupabaseConnection().then(async (status) => {
   };
 
   const handlePostDiscipline = (req: Request, res: Response) => {
-    const { schoolId, studentId, date, category, description, severity, sanction, parentNotified, recordedBy } = req.body;
+    const { schoolId, studentId, classId, section, date, category, description, severity, sanction, parentNotified, recordedBy, isOther } = req.body;
     if (!schoolId || !studentId || !category) {
       return res.status(400).json({ error: 'Paramètres d’incident manquants' });
     }
+    const lockedTimestamp = new Date().toISOString();
     const inc = db.createDisciplineIncident(schoolId, {
       studentId,
-      date: date || new Date().toISOString().split('T')[0],
+      classId,
+      section,
+      date: date || lockedTimestamp.split('T')[0],
       category,
       description: description || '',
       severity: severity || 'Modéré',
       sanction: sanction || 'Avertissement',
       parentNotified: Boolean(parentNotified),
       recordedBy: recordedBy || 'Directeur de Discipline',
+      immutableTimestamp: lockedTimestamp,
+      isOther: Boolean(isOther || category === 'Autre'),
     });
     res.status(201).json(inc);
   };
@@ -695,7 +838,7 @@ checkSupabaseConnection().then(async (status) => {
   });
 
   app.post('/api/fees', (req: Request, res: Response) => {
-    const { schoolId, academicYearId, name, amountUSD, amountCDF, dueDate, mandatory } = req.body;
+    const { schoolId, academicYearId, name, amountUSD, amountCDF, dueDate, mandatory, targetClassIds, installmentName } = req.body;
     const fee = db.createFee(schoolId, {
       academicYearId,
       name,
@@ -703,8 +846,65 @@ checkSupabaseConnection().then(async (status) => {
       amountCDF: Number(amountCDF) || 0,
       dueDate: dueDate || '',
       mandatory: mandatory !== false,
+      targetClassIds: Array.isArray(targetClassIds) ? targetClassIds : undefined,
+      installmentName: installmentName || undefined,
     });
     res.status(201).json(fee);
+  });
+
+  app.put('/api/fees/:id', (req: Request, res: Response) => {
+    const schoolId = (req.query.schoolId as string) || req.body.schoolId || 'sch-bobokoli';
+    const updated = db.updateFee(schoolId, req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'Frais scolaire introuvable' });
+    res.json(updated);
+  });
+
+  app.delete('/api/fees/:id', (req: Request, res: Response) => {
+    const schoolId = (req.query.schoolId as string) || (req.body && req.body.schoolId) || 'sch-bobokoli';
+    const success = db.deleteFee(schoolId, req.params.id);
+    if (!success) return res.status(404).json({ error: 'Frais introuvable' });
+    res.json({ success: true });
+  });
+
+  // 12. Transferts Inter-Établissements (Gestion Élèves & Palmarès RDC)
+  app.get('/api/transfers', (req: Request, res: Response) => {
+    const schoolId = (req.query.schoolId as string) || 'sch-bobokoli';
+    res.json(db.getStudentTransfers(schoolId));
+  });
+
+  app.post('/api/transfers', (req: Request, res: Response) => {
+    try {
+      const { sourceSchoolId, studentId, targetSchoolId, remarks, requestedBy } = req.body;
+      if (!sourceSchoolId || !studentId || !targetSchoolId) {
+        return res.status(400).json({ error: 'École source, élève et école cible sont obligatoires' });
+      }
+      const transfer = db.createStudentTransfer(sourceSchoolId, {
+        studentId,
+        targetSchoolId,
+        remarks,
+        requestedBy,
+      });
+      res.status(201).json(transfer);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Erreur lors de la création du transfert' });
+    }
+  });
+
+  app.patch('/api/transfers/:id/accept', (req: Request, res: Response) => {
+    const { targetClassId, reviewedBy } = req.body;
+    if (!targetClassId) {
+      return res.status(400).json({ error: 'La classe de destination est obligatoire' });
+    }
+    const transfer = db.acceptStudentTransfer(req.params.id, targetClassId, reviewedBy || 'Directeur Général');
+    if (!transfer) return res.status(404).json({ error: 'Demande de transfert introuvable ou déjà traitée' });
+    res.json(transfer);
+  });
+
+  app.patch('/api/transfers/:id/reject', (req: Request, res: Response) => {
+    const { remarks, reviewedBy } = req.body;
+    const transfer = db.rejectStudentTransfer(req.params.id, remarks || 'Non conforme', reviewedBy || 'Directeur Général');
+    if (!transfer) return res.status(404).json({ error: 'Demande de transfert introuvable' });
+    res.json(transfer);
   });
 
   app.get('/api/payments', async (req: Request, res: Response) => {
